@@ -1,0 +1,228 @@
+#!/usr/bin/env -S cmake -P
+# -*- CMake -*-
+
+set(CMATE "cmate")
+set(CMATE_VERSION "X.Y.Z")
+
+##############################################################################
+#
+# Utility functions
+#
+##############################################################################
+function(cmate_show_help)
+    message("\
+CMake Automatic TargEts v${CMATE_VERSION}
+
+usage: ${CMATE} [OPTIONS] COMMAND
+
+Options:
+  --verbose     Verbose operation
+  --simulate    Echo commands instead of running them
+
+Commands:
+  configure     Scans and configures targets
+  help          Display this information
+")
+endfunction()
+
+function(cmate_die MSG)
+    message(FATAL_ERROR "CMate: error: ${MSG}")
+endfunction()
+
+function(cmate_msg MSG)
+    message("CMate: ${MSG}")
+endfunction()
+
+function(cmate_info MSG)
+    if(CMATE_VERBOSE)
+        cmate_msg(${MSG})
+    endif()
+endfunction()
+
+function(cmate_setg VAR VAL)
+    set(${VAR} "${VAL}" CACHE INTERNAL "${VAR}")
+endfunction()
+
+function(cmate_setg VAR VAL)
+    set(${VAR} "${VAL}" CACHE INTERNAL "${VAR}")
+endfunction()
+
+##############################################################################
+#
+# Library processing functions
+#
+##############################################################################
+function(cmate_library NS LIB INC_DIR SRC_DIR)
+    string(TOUPPER ${LIB} VBASE)
+    string(REPLACE "-" "_" VBASE ${VBASE})
+
+    cmate_msg("library ${LIB} INC=${INC_DIR} SRC=${SRC_DIR}")
+    file(
+        WRITE "${SRC_DIR}/CMakeLists.txt"
+        "\
+add_library(${LIB})
+add_library(${NS}::${LIB} ALIAS ${LIB})
+
+set(${VBASE}_INC_DIR \"\${CMAKE_SOURCE_DIR}/include/${LIB}\")
+set(${VBASE}_SRC_DIR \"\${CMAKE_CURRENT_SOURCE_DIR}\")
+
+file(GLOB_RECURSE ${VBASE}_HEADERS \${${VBASE}_INC_DIR}/*.[ch]pp)
+file(GLOB_RECURSE ${VBASE}_SOURCES \${${VBASE}_SRC_DIR}/*.[ch]pp)
+
+target_sources(
+    ${LIB}
+    PRIVATE
+        \${${VBASE}_HEADERS}
+        \${${VBASE}_SOURCES}
+)
+
+target_include_directories(
+    ${LIB}
+    PUBLIC
+        $<BUILD_INTERFACE:\${${VBASE}_INC_DIR}>
+        $<INSTALL_INTERFACE:\${CMAKE_INSTALL_INCLUDEDIR}/${NS}>
+    PRIVATE
+        \${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(
+    ${LIB}
+    PUBLIC
+        nlohmann_json::nlohmann_json
+)
+
+set_target_properties(
+    ${LIB}
+    PROPERTIES
+    OUTPUT_NAME ${LIB}
+)
+"
+    )
+endfunction()
+
+##############################################################################
+#
+# Target processing functions
+#
+##############################################################################
+function(cmate_configure_target TYPE DIR)
+    cmate_msg("configuring target ${TYPE} in ${DIR}")
+endfunction()
+
+function(cmate_configure_targets TYPE)
+    string(TOLOWER TYPE TDIR)
+    if(NOT IS_DIRECTORY ${TDIR})
+        cmate_msg("no ${TYPE} targets")
+        return()
+    endif()
+
+    file(GLOB TARGETS "${TDIR}/*")
+
+    foreach(TARGET ${TARGETS})
+    endforeach()
+endfunction()
+
+function(cmate_configure DIR)
+    # Find public libraries (those having public headers)
+    file(GLOB LIB_INC_DIRS "${DIR}/include/*")
+
+    foreach(LIB_INC_DIR ${LIB_INC_DIRS})
+        string(REPLACE "${DIR}/include/" "" LIB ${LIB_INC_DIR})
+        set(LIB_SRC_DIR "${DIR}/src/${LIB}")
+
+        cmate_library("ouech" ${LIB} ${LIB_INC_DIR} ${LIB_SRC_DIR})
+    endforeach()
+
+    foreach(TYPE LIB BIN TEST)
+        cmate_configure_targets(${TYPE})
+    endforeach()
+endfunction()
+
+##############################################################################
+#
+# Argument functions
+#
+##############################################################################
+function(cmate_locate_cmate_arguments)
+    set(FOUND OFF)
+
+    foreach(POS RANGE ${CMAKE_ARGC})
+        string(TOLOWER "${CMAKE_ARGV${POS}}" ARG)
+        math(EXPR POS "${POS}+1")
+
+        if (ARG MATCHES "${CMATE}$")
+            # Script args follow us, POS already incremented
+            set(FOUND ON)
+            cmate_setg(CMATE_POS ${POS})
+            break()
+        endif()
+    endforeach()
+
+    if(NOT FOUND)
+        # Should not happen if script has correct name (see CMATE at top)
+        cmate_die("parse_argument")
+    endif()
+endfunction()
+
+function(cmate_parse_arguments)
+    cmate_locate_cmate_arguments()
+
+    while(CMATE_POS LESS ${CMAKE_ARGC})
+        if ("${CMAKE_ARGV${CMATE_POS}}" MATCHES "--?([A-Za-z0-9_-]+)")
+            list(FIND CMATE_OPTIONS ${CMAKE_MATCH_1} OPT)
+
+            if (OPT LESS 0)
+                cmate_die("unknown option: ${CMAKE_MATCH_1}")
+            else()
+                string(TOUPPER "CMATE_${CMAKE_MATCH_1}" OPT)
+                string(REPLACE "-" "_" OPT "${OPT}")
+                cmate_setg(${OPT} 1)
+            endif()
+        else()
+            list(APPEND CMATE_ARGS "${CMAKE_ARGV${CMATE_POS}}")
+        endif()
+
+        math(EXPR CMATE_POS "${CMATE_POS}+1")
+    endwhile()
+
+    list(LENGTH CMATE_ARGS CMATE_ARGC)
+
+    if (CMATE_ARGC GREATER 0)
+        list(POP_FRONT CMATE_ARGS CMATE_CMD)
+        cmate_setg(CMATE_CMD "${CMATE_CMD}")
+    endif()
+
+    cmate_setg(CMATE_ARGS "${CMATE_ARGS}")
+    get_filename_component(CMATE_ENV "${CMATE_ENV}" REALPATH)
+    cmate_setg(CMATE_ENV ${CMATE_ENV})
+endfunction()
+
+##############################################################################
+#
+# Command processing
+#
+##############################################################################
+function(cmate_process_cmd)
+    if (CMATE_CMD STREQUAL "version")
+        message(${CMATE_VERSION})
+    elseif (CMATE_CMD STREQUAL "configure")
+        get_filename_component(DIR "." ABSOLUTE)
+        cmate_configure(${DIR})
+    elseif (CMATE_CMD STREQUAL "help")
+        cmate_show_help()
+    elseif(CMATE_CMD)
+        cmate_msg("unknown command: ${CMATE_CMD}")
+    elseif(NOT CMATE_CMD)
+        cmate_msg("no command")
+    endif()
+endfunction()
+
+##############################################################################
+#
+# Main part
+#
+##############################################################################
+if(CMAKE_SCRIPT_MODE_FILE AND NOT CMAKE_PARENT_LIST_FILE)
+    cmate_parse_arguments()
+    cmate_process_cmd()
+endif()
