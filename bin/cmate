@@ -3,6 +3,20 @@
 
 set(CMATE "cmate")
 set(CMATE_VERSION "X.Y.Z")
+set(CMATE_CONF "cmate.txt")
+list(
+    APPEND
+    CMATE_OPTIONS
+    "verbose"
+)
+list(
+    APPEND
+    CMATE_CONFIGURE_OPTIONS
+    "dump"
+    "namespace"
+    "version"
+    "version-file"
+)
 
 ##############################################################################
 #
@@ -17,7 +31,6 @@ usage: ${CMATE} [OPTIONS] COMMAND
 
 Options:
   --verbose     Verbose operation
-  --simulate    Echo commands instead of running them
 
 Commands:
   configure     Scans and configures targets
@@ -33,6 +46,10 @@ function(cmate_msg MSG)
     message("CMate: ${MSG}")
 endfunction()
 
+function(cmate_warn MSG)
+    message(WARNING "CMate: ${MSG}")
+endfunction()
+
 function(cmate_info MSG)
     if(CMATE_VERBOSE)
         cmate_msg(${MSG})
@@ -43,9 +60,53 @@ function(cmate_setg VAR VAL)
     set(${VAR} "${VAL}" CACHE INTERNAL "${VAR}")
 endfunction()
 
-function(cmate_setg VAR VAL)
-    set(${VAR} "${VAL}" CACHE INTERNAL "${VAR}")
+function(cmate_load_version)
+    if(NOT "${CMATE_CONFIGURE_VERSION}" STREQUAL "")
+        return()
+    endif()
+
+    if("${CMATE_CONFIGURE_VERSION_FILE}" STREQUAL "")
+        cmate_setg(
+            CMATE_CONFIGURE_VERSION_FILE
+            "${CMATE_ROOT_DIR}/version.txt"
+        )
+    endif()
+
+    if(EXISTS ${CMATE_CONFIGURE_VERSION_FILE})
+        file(
+            STRINGS ${CMATE_CONFIGURE_VERSION_FILE} VER
+            REGEX "^[^\\.]+\\.[^\\.]+\\.[^\\.]+$"
+            LIMIT_COUNT 1
+        )
+
+        cmate_setg(CMATE_CONFIGURE_VERSION ${VER})
+    endif()
 endfunction()
+
+function(cmate_set_version)
+    cmate_load_version()
+
+    if("${CMATE_CONFIGURE_VERSION}" STREQUAL "")
+        cmate_warn("using default version: 0.1.0")
+        cmate_setg(CMATE_CONFIGURE_VERSION_FILE "0.1.0")
+    endif()
+
+    if("${CMATE_CONFIGURE_VERSION}" MATCHES "^([^\\.]+)\\.([^\\.]+)\\.([^\\.]+)$")
+        cmate_setg(CMATE_CONFIGURE_VERSION_MAJOR ${CMAKE_MATCH_1})
+        cmate_setg(CMATE_CONFIGURE_VERSION_MINOR ${CMAKE_MATCH_2})
+        cmate_setg(CMATE_CONFIGURE_VERSION_PATCH ${CMAKE_MATCH_3})
+    else()
+        cmate_die("unable to parse version: ${CMATE_CONFIGURE_VERSION}")
+    endif()
+
+    cmate_setg(CMATE_ROOT_DIR ${DIR})
+endfunction()
+
+macro(cmate_append_if IVAR OVAR CONTENT)
+    if(NOT ${${IVAR}} STREQUAL "")
+        string(APPEND ${OVAR} "${CONTENT}")
+    endif()
+endmacro()
 
 ##############################################################################
 #
@@ -56,13 +117,17 @@ function(cmate_library NS LIB INC_DIR SRC_DIR)
     string(TOUPPER ${LIB} VBASE)
     string(REPLACE "-" "_" VBASE ${VBASE})
 
-    cmate_msg("library ${LIB} INC=${INC_DIR} SRC=${SRC_DIR}")
-    file(
-        WRITE "${SRC_DIR}/CMakeLists.txt"
-        "\
-add_library(${LIB})
-add_library(${NS}::${LIB} ALIAS ${LIB})
+    set(FILE "${SRC_DIR}/CMakeLists.txt")
+    set(CONTENT "add_library(${LIB})")
+    cmate_append_if(
+        CMATE_CONFIGURE_NAMESPACE CONTENT
+        "\nadd_library(${CMATE_CONFIGURE_NAMESPACE}::${LIB} ALIAS ${LIB})"
+    )
 
+    string(
+        APPEND
+        CONTENT
+        "\n
 set(${VBASE}_INC_DIR \"\${CMAKE_SOURCE_DIR}/include/${LIB}\")
 set(${VBASE}_SRC_DIR \"\${CMAKE_CURRENT_SOURCE_DIR}\")
 
@@ -94,10 +159,17 @@ target_link_libraries(
 set_target_properties(
     ${LIB}
     PROPERTIES
-    OUTPUT_NAME ${LIB}
+        VERSION ${CMATE_CONFIGURE_VERSION}
+        SOVERSION ${CMATE_CONFIGURE_VERSION_MAJOR}.${CMATE_CONFIGURE_VERSION_MINOR}
 )
 "
     )
+
+    if(${CMATE_CONFIGURE_DUMP})
+        message(${CONTENT})
+    endif()
+
+    file(WRITE ${FILE} ${CONTENT})
 endfunction()
 
 ##############################################################################
@@ -112,7 +184,6 @@ endfunction()
 function(cmate_configure_targets TYPE)
     string(TOLOWER TYPE TDIR)
     if(NOT IS_DIRECTORY ${TDIR})
-        cmate_msg("no ${TYPE} targets")
         return()
     endif()
 
@@ -122,19 +193,56 @@ function(cmate_configure_targets TYPE)
     endforeach()
 endfunction()
 
-function(cmate_configure DIR)
+function(cmate_configure)
     # Find public libraries (those having public headers)
-    file(GLOB LIB_INC_DIRS "${DIR}/include/*")
+    file(GLOB LIB_INC_DIRS "${CMATE_ROOT_DIR}/include/*")
 
     foreach(LIB_INC_DIR ${LIB_INC_DIRS})
-        string(REPLACE "${DIR}/include/" "" LIB ${LIB_INC_DIR})
-        set(LIB_SRC_DIR "${DIR}/src/${LIB}")
+        string(REPLACE "${CMATE_ROOT_DIR}/include/" "" LIB ${LIB_INC_DIR})
+        set(LIB_SRC_DIR "${CMATE_ROOT_DIR}/src/${LIB}")
 
         cmate_library("ouech" ${LIB} ${LIB_INC_DIR} ${LIB_SRC_DIR})
     endforeach()
 
     foreach(TYPE LIB BIN TEST)
         cmate_configure_targets(${TYPE})
+    endforeach()
+endfunction()
+
+##############################################################################
+#
+# Configuration functions
+#
+##############################################################################
+function(cmate_check_option OPT OPTS LABEL)
+    list(FIND OPTS ${OPT} IDX)
+
+    if (IDX LESS 0)
+        cmate_die("unknown ${LABEL} option: ${OPT}")
+    endif()
+endfunction()
+
+function(cmate_load_conf)
+    set(CFILE "${CMATE_ROOT_DIR}/${CMATE_CONF}")
+
+    if(NOT EXISTS ${CFILE})
+        return()
+    endif()
+
+    file(STRINGS ${CFILE} LINES)
+
+    foreach(LINE ${LINES})
+        if(LINE MATCHES "^#")
+            # Skip comments
+            continue()
+        elseif(LINE MATCHES "^([A-Za-z0-9_-]+)=(.+)$")
+            # Variable assignment
+            cmate_check_option(
+                ${CMAKE_MATCH_1} CMATE_CONFIGURE_OPTIONS
+                "configure"
+            )
+            cmate_setg("CMATE_CONFIGURE_${CMAKE_MATCH_1}" "${CMAKE_MATCH_2}")
+        endif()
     endforeach()
 endfunction()
 
@@ -166,18 +274,33 @@ endfunction()
 
 function(cmate_parse_arguments)
     cmate_locate_cmate_arguments()
+    set(OPTS_LABEL "generic")
+    set(OPTS ${CMATE_OPTIONS})
 
     while(CMATE_POS LESS ${CMAKE_ARGC})
-        if ("${CMAKE_ARGV${CMATE_POS}}" MATCHES "--?([A-Za-z0-9_-]+)")
-            list(FIND CMATE_OPTIONS ${CMAKE_MATCH_1} OPT)
+        if ("${CMAKE_ARGV${CMATE_POS}}" MATCHES "^--?([A-Za-z0-9_-]+)(=(.+))?$")
+            cmate_check_option(${CMAKE_MATCH_1} "${OPTS}" ${OPTS_LABEL})
+            set(OPT "CMATE")
 
-            if (OPT LESS 0)
-                cmate_die("unknown option: ${CMAKE_MATCH_1}")
-            else()
-                string(TOUPPER "CMATE_${CMAKE_MATCH_1}" OPT)
-                string(REPLACE "-" "_" OPT "${OPT}")
-                cmate_setg(${OPT} 1)
+            if(NOT ${OPTS_LABEL} STREQUAL "generic")
+                string(APPEND OPT "_${OPTS_LABEL}")
             endif()
+
+            string(APPEND OPT "_${CMAKE_MATCH_1}")
+            string(REPLACE "-" "_" OPT "${OPT}")
+            string(TOUPPER ${OPT} OPT)
+
+            if("${CMAKE_MATCH_3}" STREQUAL "")
+                cmate_setg(${OPT} 1)
+            else()
+                cmate_setg(${OPT} "${CMAKE_MATCH_3}")
+            endif()
+        elseif("${CMATE_CMD}" STREQUAL "")
+            set(CMATE_CMD "${CMAKE_ARGV${CMATE_POS}}")
+            set(OPTS_LABEL ${CMATE_CMD})
+            set(OPTS_VAR CMATE_${CMATE_CMD}_OPTIONS)
+            string(TOUPPER "${OPTS_VAR}" OPTS_VAR)
+            set(OPTS ${${OPTS_VAR}})
         else()
             list(APPEND CMATE_ARGS "${CMAKE_ARGV${CMATE_POS}}")
         endif()
@@ -187,11 +310,7 @@ function(cmate_parse_arguments)
 
     list(LENGTH CMATE_ARGS CMATE_ARGC)
 
-    if (CMATE_ARGC GREATER 0)
-        list(POP_FRONT CMATE_ARGS CMATE_CMD)
-        cmate_setg(CMATE_CMD "${CMATE_CMD}")
-    endif()
-
+    cmate_setg(CMATE_CMD "${CMATE_CMD}")
     cmate_setg(CMATE_ARGS "${CMATE_ARGS}")
     get_filename_component(CMATE_ENV "${CMATE_ENV}" REALPATH)
     cmate_setg(CMATE_ENV ${CMATE_ENV})
@@ -206,8 +325,8 @@ function(cmate_process_cmd)
     if (CMATE_CMD STREQUAL "version")
         message(${CMATE_VERSION})
     elseif (CMATE_CMD STREQUAL "configure")
-        get_filename_component(DIR "." ABSOLUTE)
-        cmate_configure(${DIR})
+        cmate_set_version()
+        cmate_configure()
     elseif (CMATE_CMD STREQUAL "help")
         cmate_show_help()
     elseif(CMATE_CMD)
@@ -223,6 +342,9 @@ endfunction()
 #
 ##############################################################################
 if(CMAKE_SCRIPT_MODE_FILE AND NOT CMAKE_PARENT_LIST_FILE)
+    get_filename_component(DIR "." ABSOLUTE)
+    cmate_setg(CMATE_ROOT_DIR ${DIR})
     cmate_parse_arguments()
+    cmate_load_conf()
     cmate_process_cmd()
 endif()
