@@ -102,9 +102,35 @@ function(cmate_set_version)
     cmate_setg(CMATE_ROOT_DIR ${DIR})
 endfunction()
 
+macro(cmate_setv VAR VAL)
+    if("${${VAR}}" STREQUAL "")
+        set(${VAR} ${VAL})
+    endif()
+endmacro()
+
+macro(cmate_append OVAR CONTENT)
+    cmake_parse_arguments(APPEND "" "PRE_NL;POST_NL" "" ${ARGN})
+    cmate_setv(APPEND_PRE_NL 0)
+    cmate_setv(APPEND_POST_NL 1)
+
+    if(APPEND_PRE_NL GREATER 0)
+        string(REPEAT "\n" ${APPEND_PRE_NL} PRE)
+    endif()
+    if(APPEND_POST_NL GREATER 0)
+        string(REPEAT "\n" ${APPEND_POST_NL} POST)
+    endif()
+
+    string(APPEND ${OVAR} "${PRE}${CONTENT}${POST}")
+endmacro()
+
 macro(cmate_append_if IVAR OVAR CONTENT)
+    cmake_parse_arguments(APPEND "" "" "" ${ARGN})
+
     if(NOT ${${IVAR}} STREQUAL "")
-        string(APPEND ${OVAR} "${CONTENT}")
+        cmate_append(
+            ${OVAR} "${CONTENT}"
+            "${APPEND_UNPARSED_ARGUMENTS}"
+        )
     endif()
 endmacro()
 
@@ -113,41 +139,40 @@ endmacro()
 # Library processing functions
 #
 ##############################################################################
-function(cmate_library NS LIB INC_DIR SRC_DIR)
+function(cmate_library LIB INC_DIR SRC_DIR)
     string(TOUPPER ${LIB} VBASE)
     string(REPLACE "-" "_" VBASE ${VBASE})
 
     set(FILE "${SRC_DIR}/CMakeLists.txt")
-    set(CONTENT "add_library(${LIB})")
+    cmate_append(CONTENT "add_library(${LIB})")
     cmate_append_if(
-        CMATE_CONFIGURE_NAMESPACE CONTENT
-        "\nadd_library(${CMATE_CONFIGURE_NAMESPACE}::${LIB} ALIAS ${LIB})"
-    )
-
-    string(
-        APPEND
+        CMATE_CONFIGURE_NAMESPACE
         CONTENT
-        "\n
-set(${VBASE}_INC_DIR \"\${CMAKE_SOURCE_DIR}/include/${LIB}\")
-set(${VBASE}_SRC_DIR \"\${CMAKE_CURRENT_SOURCE_DIR}\")
+        "add_library(${CMATE_CONFIGURE_NAMESPACE}::${LIB} ALIAS ${LIB})"
+    )
+    cmate_append(
+        CONTENT
+        "
+set(${VBASE}_INC_DIR \"\\\${CMAKE_SOURCE_DIR}/include/${LIB}\"
+set(${VBASE}_SRC_DIR \"\\\${CMAKE_CURRENT_SOURCE_DIR}\")
 
-file(GLOB_RECURSE ${VBASE}_HEADERS \${${VBASE}_INC_DIR}/*.[ch]pp)
-file(GLOB_RECURSE ${VBASE}_SOURCES \${${VBASE}_SRC_DIR}/*.[ch]pp)
+file(GLOB_RECURSE ${VBASE}_HEADERS \\\${${VBASE}_INC_DIR}/*.[ch]pp)
+file(GLOB_RECURSE ${VBASE}_SOURCES \\\${${VBASE}_SRC_DIR}/*.[ch]pp)
 
 target_sources(
     ${LIB}
     PRIVATE
-        \${${VBASE}_HEADERS}
-        \${${VBASE}_SOURCES}
+        \\\${${VBASE}_HEADERS}
+        \\\${${VBASE}_SOURCES}
 )
 
 target_include_directories(
     ${LIB}
     PUBLIC
-        $<BUILD_INTERFACE:\${${VBASE}_INC_DIR}>
-        $<INSTALL_INTERFACE:\${CMAKE_INSTALL_INCLUDEDIR}/${NS}>
+        $<BUILD_INTERFACE:\\\${${VBASE}_INC_DIR}>
+        $<INSTALL_INTERFACE:\\\${CMAKE_INSTALL_INCLUDEDIR}/${NS}>
     PRIVATE
-        \${CMAKE_CURRENT_SOURCE_DIR}
+        \\\${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_link_libraries(
@@ -201,7 +226,7 @@ function(cmate_configure)
         string(REPLACE "${CMATE_ROOT_DIR}/include/" "" LIB ${LIB_INC_DIR})
         set(LIB_SRC_DIR "${CMATE_ROOT_DIR}/src/${LIB}")
 
-        cmate_library("ouech" ${LIB} ${LIB_INC_DIR} ${LIB_SRC_DIR})
+        cmate_library(${LIB} ${LIB_INC_DIR} ${LIB_SRC_DIR})
     endforeach()
 
     foreach(TYPE LIB BIN TEST)
