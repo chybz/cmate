@@ -2,7 +2,7 @@
 # -*- CMake -*-
 
 set(CMATE "cmate")
-set(CMATE_VERSION "X.Y.Z")
+set(CMATE_VER "X.Y.Z")
 set(CMATE_CONF "cmate.txt")
 list(
     APPEND
@@ -16,6 +16,7 @@ list(
     "namespace"
     "version"
     "version-file"
+    "header-pat"
 )
 
 ##############################################################################
@@ -25,7 +26,7 @@ list(
 ##############################################################################
 function(cmate_show_help)
     message("\
-CMake Automatic TargEts v${CMATE_VERSION}
+CMake Automatic TargEts v${CMATE_VER}
 
 usage: ${CMATE} [OPTIONS] COMMAND
 
@@ -61,45 +62,43 @@ function(cmate_setg VAR VAL)
 endfunction()
 
 function(cmate_load_version)
-    if(NOT "${CMATE_CONFIGURE_VERSION}" STREQUAL "")
+    if(NOT "${CMATE_VERSION}" STREQUAL "")
         return()
     endif()
 
-    if("${CMATE_CONFIGURE_VERSION_FILE}" STREQUAL "")
+    if("${CMATE_VERSION_FILE}" STREQUAL "")
         cmate_setg(
-            CMATE_CONFIGURE_VERSION_FILE
+            CMATE_VERSION_FILE
             "${CMATE_ROOT_DIR}/version.txt"
         )
     endif()
 
-    if(EXISTS ${CMATE_CONFIGURE_VERSION_FILE})
+    if(EXISTS ${CMATE_VERSION_FILE})
         file(
-            STRINGS ${CMATE_CONFIGURE_VERSION_FILE} VER
+            STRINGS ${CMATE_VERSION_FILE} VER
             REGEX "^[^\\.]+\\.[^\\.]+\\.[^\\.]+$"
             LIMIT_COUNT 1
         )
 
-        cmate_setg(CMATE_CONFIGURE_VERSION ${VER})
+        cmate_setg(CMATE_VERSION ${VER})
     endif()
 endfunction()
 
 function(cmate_set_version)
     cmate_load_version()
 
-    if("${CMATE_CONFIGURE_VERSION}" STREQUAL "")
+    if("${CMATE_VERSION}" STREQUAL "")
         cmate_warn("using default version: 0.1.0")
-        cmate_setg(CMATE_CONFIGURE_VERSION_FILE "0.1.0")
+        cmate_setg(CMATE_VERSION "0.1.0")
     endif()
 
-    if("${CMATE_CONFIGURE_VERSION}" MATCHES "^([^\\.]+)\\.([^\\.]+)\\.([^\\.]+)$")
-        cmate_setg(CMATE_CONFIGURE_VERSION_MAJOR ${CMAKE_MATCH_1})
-        cmate_setg(CMATE_CONFIGURE_VERSION_MINOR ${CMAKE_MATCH_2})
-        cmate_setg(CMATE_CONFIGURE_VERSION_PATCH ${CMAKE_MATCH_3})
+    if("${CMATE_VERSION}" MATCHES "^([^\\.]+)\\.([^\\.]+)\\.([^\\.]+)$")
+        cmate_setg(CMATE_VERSION_MAJOR ${CMAKE_MATCH_1})
+        cmate_setg(CMATE_VERSION_MINOR ${CMAKE_MATCH_2})
+        cmate_setg(CMATE_VERSION_PATCH ${CMAKE_MATCH_3})
     else()
-        cmate_die("unable to parse version: ${CMATE_CONFIGURE_VERSION}")
+        cmate_die("unable to parse version: ${CMATE_VERSION}")
     endif()
-
-    cmate_setg(CMATE_ROOT_DIR ${DIR})
 endfunction()
 
 macro(cmate_setv VAR VAL)
@@ -108,93 +107,128 @@ macro(cmate_setv VAR VAL)
     endif()
 endmacro()
 
-macro(cmate_append OVAR CONTENT)
-    cmake_parse_arguments(APPEND "" "PRE_NL;POST_NL" "" ${ARGN})
-    cmate_setv(APPEND_PRE_NL 0)
-    cmate_setv(APPEND_POST_NL 1)
+function(cmate_load_deps FILE PREFIX)
+    set(PUBLIC_DEPS "")
+    set(PRIVATE_DEPS "")
+    set(LVAR "PUBLIC_DEPS")
 
-    if(APPEND_PRE_NL GREATER 0)
-        string(REPEAT "\n" ${APPEND_PRE_NL} PRE)
+    if(EXISTS ${FILE})
+        file(STRINGS ${FILE} DEPS)
+
+        foreach(DEP ${DEPS})
+            if(DEP MATCHES "^(public|private):$")
+                set(LVAR "${CMAKE_MATCH_1}_DEPS")
+                string(TOUPPER ${LVAR} LVAR)
+            else()
+                list(APPEND ${LVAR} ${DEP})
+            endif()
+        endforeach()
     endif()
-    if(APPEND_POST_NL GREATER 0)
-        string(REPEAT "\n" ${APPEND_POST_NL} POST)
-    endif()
 
-    string(APPEND ${OVAR} "${PRE}${CONTENT}${POST}")
-endmacro()
+    set(${PREFIX}_PUBLIC_DEPS ${PUBLIC_DEPS} PARENT_SCOPE)
+    list(LENGTH PUBLIC_DEPS PUBLIC_DEPS_COUNT)
+    set(${PREFIX}_PUBLIC_DEPS_COUNT ${PUBLIC_DEPS_COUNT} PARENT_SCOPE)
 
-macro(cmate_append_if IVAR OVAR CONTENT)
-    cmake_parse_arguments(APPEND "" "" "" ${ARGN})
+    set(${PREFIX}_PRIVATE_DEPS ${PRIVATE_DEPS} PARENT_SCOPE)
+    list(LENGTH PRIVATE_DEPS PRIVATE_DEPS_COUNT)
+    set(${PREFIX}_PRIVATE_DEPS_COUNT ${PRIVATE_DEPS_COUNT} PARENT_SCOPE)
 
-    if(NOT ${${IVAR}} STREQUAL "")
-        cmate_append(
-            ${OVAR} "${CONTENT}"
-            "${APPEND_UNPARSED_ARGUMENTS}"
-        )
-    endif()
-endmacro()
+    math(EXPR DEPS_COUNT "${PUBLIC_DEPS_COUNT} + ${PRIVATE_DEPS_COUNT}")
+    set(${PREFIX}_DEPS_COUNT ${DEPS_COUNT} PARENT_SCOPE)
+endfunction()
 
 ##############################################################################
 #
 # Library processing functions
 #
 ##############################################################################
-function(cmate_library LIB INC_DIR SRC_DIR)
+function(cmate_library LIB)
     string(TOUPPER ${LIB} VBASE)
     string(REPLACE "-" "_" VBASE ${VBASE})
 
-    set(FILE "${SRC_DIR}/CMakeLists.txt")
-    cmate_append(CONTENT "add_library(${LIB})")
-    cmate_append_if(
-        CMATE_CONFIGURE_NAMESPACE
-        CONTENT
-        "add_library(${CMATE_CONFIGURE_NAMESPACE}::${LIB} ALIAS ${LIB})"
-    )
-    cmate_append(
+    set(HDIR "${CMATE_ROOT_DIR}/include/${LIB}")
+    set(SDIR "${CMATE_ROOT_DIR}/src/${LIB}")
+    set(CM_FILE "${SDIR}/CMakeLists.txt")
+    set(DEPS_FILE "${SDIR}/deps.txt")
+    file(GLOB_RECURSE HEADERS "${HDIR}/${CMATE_HEADER_PAT}")
+    file(GLOB_RECURSE SOURCES "${SDIR}/${CMATE_SOURCE_PAT}")
+
+    string(APPEND CONTENT "add_library(${LIB})\n")
+
+    if(CMATE_NAMESPACE)
+        string(
+            APPEND
+            CONTENT
+            "add_library(${CMATE_NAMESPACE}::${LIB} ALIAS ${LIB})\n"
+        )
+    endif()
+
+    string(
+        APPEND
         CONTENT
         "
-set(${VBASE}_INC_DIR \"\\\${CMAKE_SOURCE_DIR}/include/${LIB}\"
-set(${VBASE}_SRC_DIR \"\\\${CMAKE_CURRENT_SOURCE_DIR}\")
+set(${VBASE}_INC_DIR \"\${CMAKE_SOURCE_DIR}/include/${LIB}\"
+file(GLOB_RECURSE ${VBASE}_HEADERS \${${VBASE}_INC_DIR}/${CMATE_HEADER_PAT})
+list(APPEND ${VBASE}_ALL_SOURCES \${${VBASE}_HEADERS})
 
-file(GLOB_RECURSE ${VBASE}_HEADERS \\\${${VBASE}_INC_DIR}/*.[ch]pp)
-file(GLOB_RECURSE ${VBASE}_SOURCES \\\${${VBASE}_SRC_DIR}/*.[ch]pp)
+set(${VBASE}_SRC_DIR \"\${CMAKE_CURRENT_SOURCE_DIR}\")
+file(GLOB_RECURSE ${VBASE}_SOURCES \${${VBASE}_SRC_DIR}/${CMATE_SOURCE_PAT})
+list(APPEND ${VBASE}_ALL_SOURCES \${${VBASE}_SOURCES})
 
 target_sources(
     ${LIB}
     PRIVATE
-        \\\${${VBASE}_HEADERS}
-        \\\${${VBASE}_SOURCES}
+        \${${VBASE}_ALL_SOURCES}
 )
 
 target_include_directories(
     ${LIB}
     PUBLIC
-        $<BUILD_INTERFACE:\\\${${VBASE}_INC_DIR}>
-        $<INSTALL_INTERFACE:\\\${CMAKE_INSTALL_INCLUDEDIR}/${NS}>
+        $<BUILD_INTERFACE:\${${VBASE}_INC_DIR}>
+        $<INSTALL_INTERFACE:\${CMAKE_INSTALL_INCLUDEDIR}>
     PRIVATE
-        \\\${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-target_link_libraries(
-    ${LIB}
-    PUBLIC
-        nlohmann_json::nlohmann_json
-)
-
-set_target_properties(
-    ${LIB}
-    PROPERTIES
-        VERSION ${CMATE_CONFIGURE_VERSION}
-        SOVERSION ${CMATE_CONFIGURE_VERSION_MAJOR}.${CMATE_CONFIGURE_VERSION_MINOR}
+        \${CMAKE_CURRENT_SOURCE_DIR}
 )
 "
     )
 
-    if(${CMATE_CONFIGURE_DUMP})
+    cmate_load_deps(${DEPS_FILE} LIB)
+
+    if(${LIB_DEPS_COUNT} GREATER 0)
+        set(DEPS "\ntarget_link_libraries(\n    ${LIB}")
+
+        foreach(TYPE PUBLIC PRIVATE)
+            if(${LIB_${TYPE}_DEPS_COUNT} GREATER 0)
+                string(APPEND DEPS "\n    ${TYPE}")
+
+                foreach(DEP ${LIB_${TYPE}_DEPS})
+                    string(APPEND DEPS "\n        ${DEP}")
+                endforeach()
+            endif()
+        endforeach()
+
+        string(APPEND DEPS "\n)\n")
+        string(APPEND CONTENT ${DEPS})
+    endif()
+
+    string(
+        APPEND
+        CONTENT
+        "
+set_target_properties(
+    ${LIB}
+    PROPERTIES
+        VERSION ${CMATE_VERSION}
+        SOVERSION ${CMATE_VERSION_MAJOR}.${CMATE_VERSION_MINOR}
+)
+"
+    )
+
+    if(${CMATE_DUMP})
         message(${CONTENT})
     endif()
 
-    file(WRITE ${FILE} ${CONTENT})
+    file(WRITE ${CM_FILE} ${CONTENT})
 endfunction()
 
 ##############################################################################
@@ -226,7 +260,7 @@ function(cmate_configure)
         string(REPLACE "${CMATE_ROOT_DIR}/include/" "" LIB ${LIB_INC_DIR})
         set(LIB_SRC_DIR "${CMATE_ROOT_DIR}/src/${LIB}")
 
-        cmate_library(${LIB} ${LIB_INC_DIR} ${LIB_SRC_DIR})
+        cmate_library(${LIB})
     endforeach()
 
     foreach(TYPE LIB BIN TEST)
@@ -245,6 +279,13 @@ function(cmate_check_option OPT OPTS LABEL)
     if (IDX LESS 0)
         cmate_die("unknown ${LABEL} option: ${OPT}")
     endif()
+endfunction()
+
+function(cmate_set_defaults)
+    get_filename_component(DIR "." ABSOLUTE)
+    cmate_setg(CMATE_ROOT_DIR ${DIR})
+    cmate_setg(CMATE_HEADER_PAT "*.hpp")
+    cmate_setg(CMATE_SOURCE_PAT "*.[ch]pp")
 endfunction()
 
 function(cmate_load_conf)
@@ -266,7 +307,7 @@ function(cmate_load_conf)
                 ${CMAKE_MATCH_1} CMATE_CONFIGURE_OPTIONS
                 "configure"
             )
-            cmate_setg("CMATE_CONFIGURE_${CMAKE_MATCH_1}" "${CMAKE_MATCH_2}")
+            cmate_setg("CMATE_${CMAKE_MATCH_1}" "${CMAKE_MATCH_2}")
         endif()
     endforeach()
 endfunction()
@@ -306,11 +347,6 @@ function(cmate_parse_arguments)
         if ("${CMAKE_ARGV${CMATE_POS}}" MATCHES "^--?([A-Za-z0-9_-]+)(=(.+))?$")
             cmate_check_option(${CMAKE_MATCH_1} "${OPTS}" ${OPTS_LABEL})
             set(OPT "CMATE")
-
-            if(NOT ${OPTS_LABEL} STREQUAL "generic")
-                string(APPEND OPT "_${OPTS_LABEL}")
-            endif()
-
             string(APPEND OPT "_${CMAKE_MATCH_1}")
             string(REPLACE "-" "_" OPT "${OPT}")
             string(TOUPPER ${OPT} OPT)
@@ -367,8 +403,7 @@ endfunction()
 #
 ##############################################################################
 if(CMAKE_SCRIPT_MODE_FILE AND NOT CMAKE_PARENT_LIST_FILE)
-    get_filename_component(DIR "." ABSOLUTE)
-    cmate_setg(CMATE_ROOT_DIR ${DIR})
+    cmate_set_defaults()
     cmate_parse_arguments()
     cmate_load_conf()
     cmate_process_cmd()
