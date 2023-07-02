@@ -4,6 +4,12 @@
 set(CMATE "cmate")
 set(CMATE_VER "X.Y.Z")
 set(CMATE_CONF "cmate.txt")
+cmake_policy(SET CMP0057 NEW)
+list(
+    APPEND
+    CMATE_CMDS
+    "configure"
+)
 list(
     APPEND
     CMATE_OPTIONS
@@ -16,7 +22,44 @@ list(
     "namespace"
     "version"
     "version-file"
+    "source-pat"
     "header-pat"
+)
+##############################################################################
+#
+# Help messages
+#
+##############################################################################
+set(CMATE_HELP_HEADER "CMake Automatic TargEts v${CMATE_VER}")
+
+# Generic help
+set(
+    CMATE_HELP
+    "
+Options:
+  --verbose     Verbose operation
+
+Commands:
+  configure     Scans and configures targets
+  help          Display this information
+
+See 'cmate help <command>' to read about a specific subcommand."
+)
+
+# Configure help
+set(
+    CMATE_CONFIGURE_HELP
+    "
+Options:
+  --dump                 Dump generated CMakeLists.txt
+  --namespace=NS         CMake package namespace
+  --version=SEMVER       CMake package version
+  --version-file=FILE    CMake package version from FILE
+  --version-file=FILE    CMake package version from FILE
+  --source-pat=PATTERN   CMate targets source file glob pattern
+                         (default: \$CACHE{CMATE_SOURCE_PAT})
+  --header-pat=PATTERN   CMate targets header file glob pattern
+                         (default: \$CACHE{CMATE_HEADER_PAT})"
 )
 
 ##############################################################################
@@ -25,18 +68,23 @@ list(
 #
 ##############################################################################
 function(cmate_show_help)
-    message("\
-CMake Automatic TargEts v${CMATE_VER}
+    set(HVAR "CMATE")
+    if(CMATE_ARGC GREATER 0)
+        list(GET CMATE_ARGS 0 HCMD)
 
-usage: ${CMATE} [OPTIONS] COMMAND
+        if(${HCMD} IN_LIST CMATE_CMDS)
+            string(TOUPPER "${HCMD}" HCMD)
+            string(APPEND HVAR "_${HCMD}")
+        else()
+            cmate_die("no such command: ${HCMD}")
+        endif()
+    endif()
 
-Options:
-  --verbose     Verbose operation
+    string(APPEND HVAR "_HELP")
+    string(CONFIGURE ${${HVAR}} HELP)
 
-Commands:
-  configure     Scans and configures targets
-  help          Display this information
-")
+    message("${CMATE_HELP_HEADER})")
+    message(${HELP})
 endfunction()
 
 function(cmate_die MSG)
@@ -142,12 +190,12 @@ endfunction()
 # Library processing functions
 #
 ##############################################################################
-function(cmate_library LIB)
+function(cmate_library LIB INC_BASE SRC_BASE)
     string(TOUPPER ${LIB} VBASE)
     string(REPLACE "-" "_" VBASE ${VBASE})
 
-    set(HDIR "${CMATE_ROOT_DIR}/include/${LIB}")
-    set(SDIR "${CMATE_ROOT_DIR}/src/${LIB}")
+    set(HDIR "${CMATE_ROOT_DIR}/${INC_BASE}/${LIB}")
+    set(SDIR "${CMATE_ROOT_DIR}/${SRC_BASE}/${LIB}")
     set(CM_FILE "${SDIR}/CMakeLists.txt")
     set(DEPS_FILE "${SDIR}/deps.txt")
     file(GLOB_RECURSE HEADERS "${HDIR}/${CMATE_HEADER_PAT}")
@@ -167,7 +215,7 @@ function(cmate_library LIB)
         APPEND
         CONTENT
         "
-set(${VBASE}_INC_DIR \"\${CMAKE_SOURCE_DIR}/include/${LIB}\"
+set(${VBASE}_INC_DIR \"\${CMAKE_SOURCE_DIR}/${INC_BASE}/${LIB}\"
 file(GLOB_RECURSE ${VBASE}_HEADERS \${${VBASE}_INC_DIR}/${CMATE_HEADER_PAT})
 list(APPEND ${VBASE}_ALL_SOURCES \${${VBASE}_HEADERS})
 
@@ -240,31 +288,24 @@ function(cmate_configure_target TYPE DIR)
     cmate_msg("configuring target ${TYPE} in ${DIR}")
 endfunction()
 
-function(cmate_configure_targets TYPE)
-    string(TOLOWER TYPE TDIR)
-    if(NOT IS_DIRECTORY ${TDIR})
-        return()
-    endif()
-
-    file(GLOB TARGETS "${TDIR}/*")
-
-    foreach(TARGET ${TARGETS})
-    endforeach()
-endfunction()
-
 function(cmate_configure)
-    # Find public libraries (those having public headers)
+    # Find libraries (libraries have headers)
     file(GLOB LIB_INC_DIRS "${CMATE_ROOT_DIR}/include/*")
 
     foreach(LIB_INC_DIR ${LIB_INC_DIRS})
         string(REPLACE "${CMATE_ROOT_DIR}/include/" "" LIB ${LIB_INC_DIR})
-        set(LIB_SRC_DIR "${CMATE_ROOT_DIR}/src/${LIB}")
-
-        cmate_library(${LIB})
+        cmate_library(${LIB} "include" "src/libs")
     endforeach()
 
-    foreach(TYPE LIB BIN TEST)
-        cmate_configure_targets(${TYPE})
+    foreach(TYPE BIN TEST)
+        string(TOLOWER TYPE CTYPE)
+        set(TDIR "${CTYPE}s")
+        file(GLOB SRC_DIRS "${CMATE_ROOT_DIR}/src/${TDIR}/*")
+
+        foreach(SRC_DIR ${SRC_DIRS})
+            string(REPLACE "${CMATE_ROOT_DIR}/include/" "" LIB ${LIB_INC_DIR})
+            cmake_language(CALL "cmate_${CTYPE}" "src/${TDIR}")
+        endforeach()
     endforeach()
 endfunction()
 
@@ -373,6 +414,7 @@ function(cmate_parse_arguments)
 
     cmate_setg(CMATE_CMD "${CMATE_CMD}")
     cmate_setg(CMATE_ARGS "${CMATE_ARGS}")
+    cmate_setg(CMATE_ARGC ${CMATE_ARGC})
     get_filename_component(CMATE_ENV "${CMATE_ENV}" REALPATH)
     cmate_setg(CMATE_ENV ${CMATE_ENV})
 endfunction()
