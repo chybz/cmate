@@ -187,27 +187,53 @@ endfunction()
 
 ##############################################################################
 #
+# Target common functions
+#
+##############################################################################
+function(cmate_target_link_deps NAME DEPS_FILE VAR)
+    cmate_load_deps(${DEPS_FILE} TGT)
+
+    if(${TGT_DEPS_COUNT} GREATER 0)
+        set(TDEPS "\ntarget_link_libraries(\n    ${NAME}")
+
+        foreach(TYPE PUBLIC PRIVATE)
+            if(${TGT_${TYPE}_DEPS_COUNT} GREATER 0)
+                string(APPEND TDEPS "\n    ${TYPE}")
+
+                foreach(DEP ${TGT_${TYPE}_DEPS})
+                    string(APPEND TDEPS "\n        ${DEP}")
+                endforeach()
+            endif()
+        endforeach()
+
+        string(APPEND TDEPS "\n)\n")
+        set(${VAR} ${TDEPS} PARENT_SCOPE)
+    endif()
+endfunction()
+
+##############################################################################
+#
 # Library processing functions
 #
 ##############################################################################
-function(cmate_library LIB INC_BASE SRC_BASE)
-    string(TOUPPER ${LIB} VBASE)
+function(cmate_lib NAME INC_BASE SRC_BASE)
+    string(TOUPPER ${NAME} VBASE)
     string(REPLACE "-" "_" VBASE ${VBASE})
 
-    set(HDIR "${CMATE_ROOT_DIR}/${INC_BASE}/${LIB}")
-    set(SDIR "${CMATE_ROOT_DIR}/${SRC_BASE}/${LIB}")
+    set(HDIR "${CMATE_ROOT_DIR}/${INC_BASE}/${NAME}")
+    set(SDIR "${CMATE_ROOT_DIR}/${SRC_BASE}/${NAME}")
     set(CM_FILE "${SDIR}/CMakeLists.txt")
     set(DEPS_FILE "${SDIR}/deps.txt")
     file(GLOB_RECURSE HEADERS "${HDIR}/${CMATE_HEADER_PAT}")
     file(GLOB_RECURSE SOURCES "${SDIR}/${CMATE_SOURCE_PAT}")
 
-    string(APPEND CONTENT "add_library(${LIB})\n")
+    string(APPEND CONTENT "add_library(${NAME})\n")
 
     if(CMATE_NAMESPACE)
         string(
             APPEND
             CONTENT
-            "add_library(${CMATE_NAMESPACE}::${LIB} ALIAS ${LIB})\n"
+            "add_library(${CMATE_NAMESPACE}::${NAME} ALIAS ${NAME})\n"
         )
     endif()
 
@@ -215,7 +241,7 @@ function(cmate_library LIB INC_BASE SRC_BASE)
         APPEND
         CONTENT
         "
-set(${VBASE}_INC_DIR \"\${CMAKE_SOURCE_DIR}/${INC_BASE}/${LIB}\"
+set(${VBASE}_INC_DIR \"\${CMAKE_SOURCE_DIR}/${INC_BASE}/${NAME}\"
 file(GLOB_RECURSE ${VBASE}_HEADERS \${${VBASE}_INC_DIR}/${CMATE_HEADER_PAT})
 list(APPEND ${VBASE}_ALL_SOURCES \${${VBASE}_HEADERS})
 
@@ -224,13 +250,13 @@ file(GLOB_RECURSE ${VBASE}_SOURCES \${${VBASE}_SRC_DIR}/${CMATE_SOURCE_PAT})
 list(APPEND ${VBASE}_ALL_SOURCES \${${VBASE}_SOURCES})
 
 target_sources(
-    ${LIB}
+    ${NAME}
     PRIVATE
         \${${VBASE}_ALL_SOURCES}
 )
 
 target_include_directories(
-    ${LIB}
+    ${NAME}
     PUBLIC
         $<BUILD_INTERFACE:\${${VBASE}_INC_DIR}>
         $<INSTALL_INTERFACE:\${CMAKE_INSTALL_INCLUDEDIR}>
@@ -240,37 +266,69 @@ target_include_directories(
 "
     )
 
-    cmate_load_deps(${DEPS_FILE} LIB)
-
-    if(${LIB_DEPS_COUNT} GREATER 0)
-        set(DEPS "\ntarget_link_libraries(\n    ${LIB}")
-
-        foreach(TYPE PUBLIC PRIVATE)
-            if(${LIB_${TYPE}_DEPS_COUNT} GREATER 0)
-                string(APPEND DEPS "\n    ${TYPE}")
-
-                foreach(DEP ${LIB_${TYPE}_DEPS})
-                    string(APPEND DEPS "\n        ${DEP}")
-                endforeach()
-            endif()
-        endforeach()
-
-        string(APPEND DEPS "\n)\n")
-        string(APPEND CONTENT ${DEPS})
-    endif()
+    cmate_target_link_deps(${NAME} ${DEPS_FILE} DEPS)
+    string(APPEND CONTENT ${DEPS})
 
     string(
         APPEND
         CONTENT
         "
 set_target_properties(
-    ${LIB}
+    ${NAME}
     PROPERTIES
         VERSION ${CMATE_VERSION}
         SOVERSION ${CMATE_VERSION_MAJOR}.${CMATE_VERSION_MINOR}
 )
 "
     )
+
+    if(${CMATE_DUMP})
+        message(${CONTENT})
+    endif()
+
+    file(WRITE ${CM_FILE} ${CONTENT})
+endfunction()
+
+##############################################################################
+#
+# Binary processing functions
+#
+##############################################################################
+function(cmate_bin NAME SRC_BASE)
+    string(TOUPPER ${NAME} VBASE)
+    string(REPLACE "-" "_" VBASE ${VBASE})
+
+    set(SDIR "${CMATE_ROOT_DIR}/${SRC_BASE}/${NAME}")
+    set(CM_FILE "${SDIR}/CMakeLists.txt")
+    set(DEPS_FILE "${SDIR}/deps.txt")
+    file(GLOB_RECURSE SOURCES "${SDIR}/${CMATE_SOURCE_PAT}")
+
+    string(APPEND CONTENT "add_binary(${NAME})\n")
+
+    string(
+        APPEND
+        CONTENT
+        "
+set(${VBASE}_SRC_DIR \"\${CMAKE_CURRENT_SOURCE_DIR}\")
+file(GLOB_RECURSE ${VBASE}_SOURCES \${${VBASE}_SRC_DIR}/${CMATE_SOURCE_PAT})
+list(APPEND ${VBASE}_ALL_SOURCES \${${VBASE}_SOURCES})
+
+target_sources(
+    ${NAME}
+    PRIVATE
+        \${${VBASE}_ALL_SOURCES}
+)
+
+target_include_directories(
+    ${NAME}
+    PRIVATE
+        \${CMAKE_CURRENT_SOURCE_DIR}
+)
+"
+    )
+
+    cmate_target_link_deps(${NAME} ${DEPS_FILE} DEPS)
+    string(APPEND CONTENT ${DEPS})
 
     if(${CMATE_DUMP})
         message(${CONTENT})
@@ -293,18 +351,18 @@ function(cmate_configure)
     file(GLOB LIB_INC_DIRS "${CMATE_ROOT_DIR}/include/*")
 
     foreach(LIB_INC_DIR ${LIB_INC_DIRS})
-        string(REPLACE "${CMATE_ROOT_DIR}/include/" "" LIB ${LIB_INC_DIR})
-        cmate_library(${LIB} "include" "src/libs")
+        string(REPLACE "${CMATE_ROOT_DIR}/include/" "" NAME ${LIB_INC_DIR})
+        cmate_lib(${NAME} "include" "src/libs")
     endforeach()
 
     foreach(TYPE BIN TEST)
-        string(TOLOWER TYPE CTYPE)
+        string(TOLOWER ${TYPE} CTYPE)
         set(TDIR "${CTYPE}s")
         file(GLOB SRC_DIRS "${CMATE_ROOT_DIR}/src/${TDIR}/*")
 
         foreach(SRC_DIR ${SRC_DIRS})
-            string(REPLACE "${CMATE_ROOT_DIR}/include/" "" LIB ${LIB_INC_DIR})
-            cmake_language(CALL "cmate_${CTYPE}" "src/${TDIR}")
+            string(REPLACE "${CMATE_ROOT_DIR}/src/${TDIR}/" "" NAME ${SRC_DIR})
+            cmake_language(CALL "cmate_${CTYPE}" ${NAME} "src/${TDIR}")
         endforeach()
     endforeach()
 endfunction()
