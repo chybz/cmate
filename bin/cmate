@@ -36,6 +36,8 @@ set(CMATE_HELP_HEADER "CMake Automatic TargEts v${CMATE_VER}")
 set(
     CMATE_HELP
     "
+Usage: cmate [OPTIONS] COMMAND
+
 Options:
   --verbose     Verbose operation
 
@@ -50,6 +52,8 @@ See 'cmate help <command>' to read about a specific subcommand."
 set(
     CMATE_CONFIGURE_HELP
     "
+Usage: cmate configure [OPTIONS]
+
 Options:
   --dump                 Dump generated CMakeLists.txt
   --namespace=NS         CMake package namespace
@@ -83,7 +87,7 @@ function(cmate_show_help)
     string(APPEND HVAR "_HELP")
     string(CONFIGURE ${${HVAR}} HELP)
 
-    message("${CMATE_HELP_HEADER})")
+    message("${CMATE_HELP_HEADER}")
     message(${HELP})
 endfunction()
 
@@ -352,17 +356,15 @@ function(cmate_configure)
 
     foreach(LIB_INC_DIR ${LIB_INC_DIRS})
         string(REPLACE "${CMATE_ROOT_DIR}/include/" "" NAME ${LIB_INC_DIR})
-        cmate_lib(${NAME} "include" "src/libs")
+        cmate_lib(${NAME} "include" "src/lib")
     endforeach()
 
-    foreach(TYPE BIN TEST)
-        string(TOLOWER ${TYPE} CTYPE)
-        set(TDIR "${CTYPE}s")
-        file(GLOB SRC_DIRS "${CMATE_ROOT_DIR}/src/${TDIR}/*")
+    foreach(TYPE bin test)
+        file(GLOB SRC_DIRS "${CMATE_ROOT_DIR}/src/${TYPE}/*")
 
         foreach(SRC_DIR ${SRC_DIRS})
-            string(REPLACE "${CMATE_ROOT_DIR}/src/${TDIR}/" "" NAME ${SRC_DIR})
-            cmake_language(CALL "cmate_${CTYPE}" ${NAME} "src/${TDIR}")
+            string(REPLACE "${CMATE_ROOT_DIR}/src/${TYPE}/" "" NAME ${SRC_DIR})
+            cmake_language(CALL "cmate_${TYPE}" ${NAME} "src/${TYPE}")
         endforeach()
     endforeach()
 endfunction()
