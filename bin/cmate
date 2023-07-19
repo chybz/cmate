@@ -168,7 +168,13 @@ function(cmate_load_deps FILE PREFIX)
         file(STRINGS ${FILE} DEPS)
 
         foreach(DEP ${DEPS})
-            if(DEP MATCHES "^(public|private):$")
+            if(DEP MATCHES "^#")
+                # Skip comments
+                continue()
+            elseif(DEP MATCHES "^[ \t\r\n]*$")
+                # Skip empty lines
+                continue()
+            elseif(DEP MATCHES "^\\[(public|private)\\]$")
                 set(LVAR "${CMAKE_MATCH_1}_DEPS")
                 string(TOUPPER ${LVAR} LVAR)
             else()
@@ -220,14 +226,14 @@ endfunction()
 # Library processing functions
 #
 ##############################################################################
-function(cmate_lib NAME INC_BASE SRC_BASE)
+function(cmate_configure_lib NAME INC_BASE SRC_BASE)
     string(TOUPPER ${NAME} VBASE)
     string(REPLACE "-" "_" VBASE ${VBASE})
 
     set(HDIR "${CMATE_ROOT_DIR}/${INC_BASE}/${NAME}")
     set(SDIR "${CMATE_ROOT_DIR}/${SRC_BASE}/${NAME}")
     set(CM_FILE "${SDIR}/CMakeLists.txt")
-    set(DEPS_FILE "${SDIR}/deps.txt")
+    set(DEPS_FILE "${SDIR}/link.txt")
     file(GLOB_RECURSE HEADERS "${HDIR}/${CMATE_HEADER_PAT}")
     file(GLOB_RECURSE SOURCES "${SDIR}/${CMATE_SOURCE_PAT}")
 
@@ -298,13 +304,13 @@ endfunction()
 # Binary processing functions
 #
 ##############################################################################
-function(cmate_bin NAME SRC_BASE)
+function(cmate_configure_bin NAME SRC_BASE)
     string(TOUPPER ${NAME} VBASE)
     string(REPLACE "-" "_" VBASE ${VBASE})
 
     set(SDIR "${CMATE_ROOT_DIR}/${SRC_BASE}/${NAME}")
     set(CM_FILE "${SDIR}/CMakeLists.txt")
-    set(DEPS_FILE "${SDIR}/deps.txt")
+    set(DEPS_FILE "${SDIR}/link.txt")
     file(GLOB_RECURSE SOURCES "${SDIR}/${CMATE_SOURCE_PAT}")
 
     string(APPEND CONTENT "add_binary(${NAME})\n")
@@ -341,32 +347,60 @@ target_include_directories(
     file(WRITE ${CM_FILE} ${CONTENT})
 endfunction()
 
+function(cmate_configure_project)
+    set(CM_FILE "${CMATE_ROOT_DIR}/CMakeLists.txt")
+
+    string(
+        APPEND
+        CONTENT
+        "cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+
+project(${CMATE_PROJECT} VERSION 1.0.0 LANGUAGES C CXX)
+
+find_package(PkgConfig REQUIRED)
+include(GNUInstallDirs)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+"
+    )
+
+    file(WRITE ${CM_FILE} ${CONTENT})
+endfunction()
+
 ##############################################################################
 #
 # Target processing functions
 #
 ##############################################################################
-function(cmate_configure_target TYPE DIR)
-    cmate_msg("configuring target ${TYPE} in ${DIR}")
-endfunction()
-
 function(cmate_configure)
     # Find libraries (libraries have headers)
     file(GLOB LIB_INC_DIRS "${CMATE_ROOT_DIR}/include/*")
 
     foreach(LIB_INC_DIR ${LIB_INC_DIRS})
         string(REPLACE "${CMATE_ROOT_DIR}/include/" "" NAME ${LIB_INC_DIR})
-        cmate_lib(${NAME} "include" "src/lib")
+        cmate_configure_lib(${NAME} "include" "src/lib")
     endforeach()
 
+    # Binaries and tests
     foreach(TYPE bin test)
         file(GLOB SRC_DIRS "${CMATE_ROOT_DIR}/src/${TYPE}/*")
 
         foreach(SRC_DIR ${SRC_DIRS})
             string(REPLACE "${CMATE_ROOT_DIR}/src/${TYPE}/" "" NAME ${SRC_DIR})
-            cmake_language(CALL "cmate_${TYPE}" ${NAME} "src/${TYPE}")
+            cmake_language(
+                CALL "cmate_configure_${TYPE}"
+                ${NAME} "src/${TYPE}"
+            )
         endforeach()
     endforeach()
+
+    # Top-level project
+    cmate_configure_project()
+
+    cmate_msg("Project ${CMATE_PROJECT} is ready")
 endfunction()
 
 ##############################################################################
@@ -385,6 +419,8 @@ endfunction()
 function(cmate_set_defaults)
     get_filename_component(DIR "." ABSOLUTE)
     cmate_setg(CMATE_ROOT_DIR ${DIR})
+    cmake_path(GET DIR FILENAME PROJECT)
+    cmate_setg(CMATE_PROJECT ${PROJECT})
     cmate_setg(CMATE_HEADER_PAT "*.hpp")
     cmate_setg(CMATE_SOURCE_PAT "*.[ch]pp")
 endfunction()
@@ -401,6 +437,9 @@ function(cmate_load_conf)
     foreach(LINE ${LINES})
         if(LINE MATCHES "^#")
             # Skip comments
+            continue()
+        elseif(LINE MATCHES "^[ \t\r\n]*$")
+            # Skip empty lines
             continue()
         elseif(LINE MATCHES "^([A-Za-z0-9_-]+)=(.+)$")
             # Variable assignment
