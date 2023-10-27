@@ -18,6 +18,7 @@ list(
 list(
     APPEND
     CMATE_CONFIGURE_OPTIONS
+    "dry-run"
     "dump"
     "namespace"
     "version"
@@ -54,7 +55,10 @@ set(
     "
 Usage: cmate configure [OPTIONS]
 
+Configure local project
+
 Options:
+  --dry-run              Don't touch anything
   --dump                 Dump generated CMakeLists.txt
   --namespace=NS         CMake package namespace
   --version=SEMVER       CMake package version
@@ -101,8 +105,9 @@ function(cmate_die MSG)
     message(FATAL_ERROR "CMate: error: ${MSG}")
 endfunction()
 
-function(cmate_msg MSG)
-    message("CMate: ${MSG}")
+function(cmate_msg)
+    list(JOIN ARGV "" MSGS)
+    message("CMate: ${MSGS}")
 endfunction()
 
 function(cmate_warn MSG)
@@ -166,6 +171,8 @@ macro(cmate_setv VAR VAL)
 endmacro()
 
 function(cmate_load_deps FILE PREFIX)
+    set(PC_MODULES "")
+    set(CMAKE_MODULES "")
     set(PUBLIC_DEPS "")
     set(PRIVATE_DEPS "")
     set(LVAR "PUBLIC_DEPS")
@@ -184,6 +191,15 @@ function(cmate_load_deps FILE PREFIX)
                 set(LVAR "${CMAKE_MATCH_1}_DEPS")
                 string(TOUPPER ${LVAR} LVAR)
             else()
+                if(DEP MATCHES "^([A-Za-z0-9_-]+)::(.+)$")
+                    if("${CMAKE_MATCH_1}" STREQUAL "pc")
+                        list(APPEND PC_MODULES "${CMAKE_MATCH_1}")
+                        set(DEP "PkgConfig::${CMAKE_MATCH_2}")
+                    else()
+                        list(APPEND CMAKE_MODULES "${CMAKE_MATCH_1}")
+                    endif()
+                endif()
+
                 list(APPEND ${LVAR} ${DEP})
             endif()
         endforeach()
@@ -240,6 +256,15 @@ endfunction()
 ##############################################################################
 function(cmate_configure_lib NAME TBASE INC_BASE SRC_BASE)
     string(TOUPPER ${TBASE} VBASE)
+
+    if(${CMATE_DRY_RUN})
+        cmate_msg(
+            "found library ${NAME}"
+            " (I:${INC_BASE}/${NAME}"
+            ", S:${SRC_BASE}/${NAME})"
+        )
+        return()
+    endif()
 
     list(APPEND CMATE_TARGETS ${TBASE})
 
@@ -321,6 +346,11 @@ endfunction()
 function(cmate_configure_prog TYPE NAME TBASE SRC_BASE)
     string(TOUPPER ${TBASE} VBASE)
 
+    if(${CMATE_DRY_RUN})
+        cmate_msg("found ${TYPE} ${NAME} (${SRC_BASE}/${NAME})")
+        return()
+    endif()
+
     set(SDIR "${CMATE_ROOT_DIR}/${SRC_BASE}/${NAME}")
     set(CM_FILE "${SDIR}/CMakeLists.txt")
     set(DEPS_FILE "${SDIR}/link.txt")
@@ -381,6 +411,10 @@ function(cmate_configure_test NAME TBASE SRC_BASE)
 endfunction()
 
 function(cmate_configure_project TARGETS SUBDIRS)
+    if(${CMATE_DRY_RUN})
+        return()
+    endif()
+
     set(CM_FILE "${CMATE_ROOT_DIR}/CMakeLists.txt")
 
     string(
@@ -433,7 +467,7 @@ install(
 
 install(
     EXPORT ${CMATE_PROJECT}-config
-    FILE ${CMATE_PROJECT}-config-config.cmake
+    FILE ${CMATE_PROJECT}-config.cmake
     NAMESPACE ${CMATE_NAMESPACE}::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/%PRJ_NAME%
 )
