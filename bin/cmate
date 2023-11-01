@@ -170,7 +170,42 @@ macro(cmate_setv VAR VAL)
     endif()
 endmacro()
 
-function(cmate_load_deps FILE PREFIX)
+function(cmate_load_module_deps FILE PREFIX)
+    set(MODULES "")
+
+    if(EXISTS ${FILE})
+        file(READ ${FILE} JSON)
+        string(JSON MODS GET ${JSON} "modules")
+        string(JSON CM GET ${MODS} "cmake")
+
+        string(JSON NMODS LENGTH ${CM})
+
+        if(${NMODS} LESS 1)
+            continue()
+        else()
+            math(EXPR NMODS "${NMODS}-1")
+        endif()
+
+        foreach(I RANGE ${NMODS})
+            string(JSON MOD GET ${CM} ${I})
+            string(JSON MODTYPE TYPE ${CM} ${I})
+            set(COMPS "")
+
+            if(${TYPE} STREQUAL "STRING")
+                # Simple module
+                list(APPEND MODULES ${MOD})
+            elseif(${TYPE} STREQUAL "OBJECT")
+                # Module and components
+                string(JSON MODNAME MEMBER ${MOD} 0)
+                list(APPEND MODULES ${MODNAME})
+            endif()
+
+            set("${PREFIX}_${MOD}_COMPS" ${COMPS} PARENT_SCOPE)
+        endforeach()
+    endif()
+endfunction()
+
+function(cmate_load_link_deps FILE PREFIX)
     set(PUBLIC_DEPS "")
     set(PRIVATE_DEPS "")
     set(LVAR "PUBLIC_DEPS")
@@ -180,6 +215,7 @@ function(cmate_load_deps FILE PREFIX)
         string(JSON LIBS GET ${JSON} "libs")
 
         foreach(TYPE PUBLIC PRIVATE)
+            # TODO: add more checks for correct JSON structure
             string(TOLOWER ${TYPE} KEY)
             string(JSON DEPS GET ${LIBS} ${KEY})
             string(JSON NDEPS LENGTH ${DEPS})
@@ -217,7 +253,7 @@ endfunction()
 #
 ##############################################################################
 function(cmate_target_link_deps NAME DEPS_FILE VAR)
-    cmate_load_deps(${DEPS_FILE} TGT)
+    cmate_load_link_deps(${DEPS_FILE} TGT)
 
     if(${TGT_DEPS_COUNT} GREATER 0)
         set(TDEPS "\ntarget_link_libraries(\n    ${NAME}")
