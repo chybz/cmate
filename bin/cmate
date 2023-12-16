@@ -170,39 +170,54 @@ macro(cmate_setv VAR VAL)
     endif()
 endmacro()
 
-function(cmate_load_module_deps FILE PREFIX)
-    set(MODULES "")
+function(cmate_load_package_deps FILE PREFIX)
+    if(NOT EXISTS ${FILE})
+        return()
+    endif()
 
-    if(EXISTS ${FILE})
-        file(READ ${FILE} JSON)
-        string(JSON MODS GET ${JSON} "modules")
-        string(JSON CM GET ${MODS} "cmake")
+    set(PACKAGES "")
 
-        string(JSON NMODS LENGTH ${CM})
+    file(READ ${FILE} JSON)
+    string(JSON PKGS GET ${JSON} "packages")
+    string(JSON CM GET ${PKGS} "cmake")
 
-        if(${NMODS} LESS 1)
-            continue()
-        else()
-            math(EXPR NMODS "${NMODS}-1")
-        endif()
+    string(JSON NPKGS LENGTH ${CM})
 
-        foreach(I RANGE ${NMODS})
-            string(JSON MOD GET ${CM} ${I})
-            string(JSON MODTYPE TYPE ${CM} ${I})
+    if(${NPKGS} LESS 1)
+        continue()
+    else()
+        math(EXPR NPKGS "${NPKGS}-1")
+    endif()
+
+    foreach(I RANGE ${NPKGS})
+        string(JSON PKG GET ${CM} ${I})
+        string(JSON PKGTYPE TYPE ${CM} ${I})
+
+        if(${PKGTYPE} STREQUAL "STRING")
+            # Simple module
+            list(APPEND PACKAGES ${PKG})
+        elseif(${PKGTYPE} STREQUAL "OBJECT")
+            # Module and components
+            string(JSON PKGNAME MEMBER ${PKG} 0)
+            list(APPEND PACKAGES ${PKGNAME})
+
+            string(JSON PKGCOMPS GET ${PKG} "${PKGNAME}")
+            string(JSON NPKGCOMPS LENGTH ${PKGCOMPS})
+            math(EXPR NPKGCOMPS "${NPKGCOMPS}-1")
             set(COMPS "")
 
-            if(${TYPE} STREQUAL "STRING")
-                # Simple module
-                list(APPEND MODULES ${MOD})
-            elseif(${TYPE} STREQUAL "OBJECT")
-                # Module and components
-                string(JSON MODNAME MEMBER ${MOD} 0)
-                list(APPEND MODULES ${MODNAME})
-            endif()
+            foreach(J RANGE ${NPKGCOMPS})
+                string(JSON COMP GET ${PKGCOMPS} ${J})
+                list(APPEND COMPS ${COMP})
+            endforeach()
 
-            set("${PREFIX}_${MOD}_COMPS" ${COMPS} PARENT_SCOPE)
-        endforeach()
-    endif()
+            set("${PREFIX}_CMAKE_${PKGNAME}_COMPS" ${COMPS} PARENT_SCOPE)
+        endif()
+    endforeach()
+
+    set("${PREFIX}_CMAKE_PACKAGES" ${PACKAGES} PARENT_SCOPE)
+
+    # TODO: add PkgConfig support
 endfunction()
 
 function(cmate_load_link_deps FILE PREFIX)
@@ -464,7 +479,37 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 "
     )
 
-    # TODO: find_package...
+    # Package dependencies
+    cmate_load_package_deps("cmate.json" PRJ)
+
+    if(PRJ_CMAKE_PACKAGES)
+        string(APPEND CONTENT "\n")
+    endif()
+
+    foreach(PKG ${PRJ_CMAKE_PACKAGES})
+
+
+        if(PRJ_CMAKE_${PKG}_COMPS)
+            string(
+                APPEND
+                CONTENT
+            "find_package(
+    ${PKG} CONFIG REQUIRED
+    COMPONENTS
+"
+            )
+
+            foreach(PC ${PRJ_CMAKE_${PKG}_COMPS})
+                string(APPEND CONTENT "        ${PC}\n")
+            endforeach()
+
+            string(APPEND CONTENT ")\n")
+        else()
+            string(APPEND CONTENT "find_package(${PKG} CONFIG REQUIRED)\n")
+        endif()
+    endforeach()
+
+    # Target subdirs
     if(SUBDIRS)
         string(APPEND CONTENT "\n")
 
