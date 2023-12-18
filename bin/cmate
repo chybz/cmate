@@ -3,7 +3,7 @@
 
 set(CMATE "cmate")
 set(CMATE_VER "X.Y.Z")
-set(CMATE_CONF "cmate.txt")
+set(CMATE_CONF "cmate.json")
 cmake_policy(SET CMP0057 NEW)
 list(
     APPEND
@@ -170,28 +170,33 @@ macro(cmate_setv VAR VAL)
     endif()
 endmacro()
 
-function(cmate_load_package_deps FILE PREFIX)
-    if(NOT EXISTS ${FILE})
-        return()
+function(cmate_json_get_array JSON KEY VAR)
+    string(JSON ARRAY GET ${JSON} ${KEY})
+    string(JSON N LENGTH ${ARRAY})
+    set(ITEMS "")
+
+    if(${N} GREATER_EQUAL 1)
+        math(EXPR N "${N}-1")
+
+        foreach(I RANGE ${N})
+            string(JSON ITEM GET ${ARRAY} ${I})
+            list(APPEND ITEMS ${ITEM})
+        endforeach()
     endif()
 
+    set(${VAR} ${ITEMS} PARENT_SCOPE)
+endfunction()
+
+function(cmate_load_cmake_package_deps JSON PREFIX)
+    cmate_json_get_array(${JSON} "cmake" "PKGS")
     set(PACKAGES "")
 
-    file(READ ${FILE} JSON)
-    string(JSON PKGS GET ${JSON} "packages")
-    string(JSON CM GET ${PKGS} "cmake")
+    foreach(PKG ${PKGS})
+        set(PKGTYPE "STRING")
 
-    string(JSON NPKGS LENGTH ${CM})
-
-    if(${NPKGS} LESS 1)
-        continue()
-    else()
-        math(EXPR NPKGS "${NPKGS}-1")
-    endif()
-
-    foreach(I RANGE ${NPKGS})
-        string(JSON PKG GET ${CM} ${I})
-        string(JSON PKGTYPE TYPE ${CM} ${I})
+        if("${PKG}" MATCHES "^[[{].*$")
+            string(JSON PKGTYPE TYPE ${PKG})
+        endif()
 
         if(${PKGTYPE} STREQUAL "STRING")
             # Simple module
@@ -201,23 +206,31 @@ function(cmate_load_package_deps FILE PREFIX)
             string(JSON PKGNAME MEMBER ${PKG} 0)
             list(APPEND PACKAGES ${PKGNAME})
 
-            string(JSON PKGCOMPS GET ${PKG} "${PKGNAME}")
-            string(JSON NPKGCOMPS LENGTH ${PKGCOMPS})
-            math(EXPR NPKGCOMPS "${NPKGCOMPS}-1")
-            set(COMPS "")
-
-            foreach(J RANGE ${NPKGCOMPS})
-                string(JSON COMP GET ${PKGCOMPS} ${J})
-                list(APPEND COMPS ${COMP})
-            endforeach()
+            cmate_json_get_array(${PKG} ${PKGNAME} "COMPS")
 
             set("${PREFIX}_CMAKE_${PKGNAME}_COMPS" ${COMPS} PARENT_SCOPE)
         endif()
     endforeach()
 
     set("${PREFIX}_CMAKE_PACKAGES" ${PACKAGES} PARENT_SCOPE)
+endfunction()
 
-    # TODO: add PkgConfig support
+function(cmate_load_conf FILE)
+    if(NOT EXISTS ${FILE})
+        return()
+    endif()
+
+    file(READ ${FILE} JSON)
+
+    string(JSON PROJECT GET ${JSON} "name")
+    cmate_setg(CMATE_PROJECT ${PROJECT})
+    string(JSON VERSION GET ${JSON} "version")
+    cmate_setg(CMATE_VERSION ${VERSION})
+    string(JSON NAMESPACE GET ${JSON} "namespace")
+    cmate_setg(CMATE_NAMESPACE ${NAMESPACE})
+
+    string(JSON PKGS GET ${JSON} "packages")
+    cmate_setg(CMATE_CMAKE_PACKAGES ${PKGS})
 endfunction()
 
 function(cmate_load_link_deps FILE PREFIX)
@@ -480,7 +493,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
     )
 
     # Package dependencies
-    cmate_load_package_deps("cmate.json" PRJ)
+    cmate_load_cmake_package_deps(${CMATE_CMAKE_PACKAGES} "PRJ")
 
     if(PRJ_CMAKE_PACKAGES)
         string(APPEND CONTENT "\n")
@@ -544,7 +557,7 @@ install(
     EXPORT ${CMATE_PROJECT}-config
     FILE ${CMATE_PROJECT}-config.cmake
     NAMESPACE ${CMATE_NAMESPACE}::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/%PRJ_NAME%
+    DESTINATION \${CMAKE_INSTALL_LIBDIR}/cmake/${CMATE_PROJECT}
 )
 "
     )
@@ -617,33 +630,6 @@ function(cmate_set_defaults)
     cmate_setg(CMATE_PROJECT ${PROJECT})
     cmate_setg(CMATE_HEADER_PAT "*.hpp")
     cmate_setg(CMATE_SOURCE_PAT "*.[ch]pp")
-endfunction()
-
-function(cmate_load_conf)
-    set(CFILE "${CMATE_ROOT_DIR}/${CMATE_CONF}")
-
-    if(NOT EXISTS ${CFILE})
-        return()
-    endif()
-
-    file(STRINGS ${CFILE} LINES)
-
-    foreach(LINE ${LINES})
-        if(LINE MATCHES "^#")
-            # Skip comments
-            continue()
-        elseif(LINE MATCHES "^[ \t\r\n]*$")
-            # Skip empty lines
-            continue()
-        elseif(LINE MATCHES "^([A-Za-z0-9_-]+)=(.+)$")
-            # Variable assignment
-            cmate_check_option(
-                ${CMAKE_MATCH_1} CMATE_CONFIGURE_OPTIONS
-                "configure"
-            )
-            cmate_setg("CMATE_${CMAKE_MATCH_1}" "${CMAKE_MATCH_2}")
-        endif()
-    endforeach()
 endfunction()
 
 ##############################################################################
@@ -740,6 +726,6 @@ endfunction()
 if(CMAKE_SCRIPT_MODE_FILE AND NOT CMAKE_PARENT_LIST_FILE)
     cmate_set_defaults()
     cmate_parse_arguments()
-    cmate_load_conf()
+    cmate_load_conf("${CMATE_ROOT_DIR}/${CMATE_CONF}")
     cmate_process_cmd()
 endif()
