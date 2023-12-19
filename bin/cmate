@@ -9,6 +9,8 @@ list(
     APPEND
     CMATE_CMDS
     "configure"
+    "build"
+    "clean"
 )
 list(
     APPEND
@@ -44,6 +46,7 @@ Options:
 
 Commands:
   configure     Scans and configures targets
+  clean
   help          Display this information
 
 See 'cmate help <command>' to read about a specific subcommand."
@@ -68,6 +71,24 @@ Options:
                          (default: \$CACHE{CMATE_SOURCE_PAT})
   --header-pat=PATTERN   CMate targets header file glob pattern
                          (default: \$CACHE{CMATE_HEADER_PAT})"
+)
+
+# Build help
+set(
+    CMATE_BUILD_HELP
+    "
+Usage: cmate build
+
+Build local project"
+)
+
+# Clean help
+set(
+    CMATE_CLEAN_HELP
+    "
+Usage: cmate clean
+
+Clean local project"
 )
 ##############################################################################
 #
@@ -122,6 +143,22 @@ endfunction()
 
 function(cmate_setg VAR VAL)
     set(${VAR} "${VAL}" CACHE INTERNAL "${VAR}")
+endfunction()
+
+function(cmate_state_file STATE VAR)
+    set(${VAR} "${CMATE_STATE_DIR}/.${STATE}" PARENT_SCOPE)
+endfunction()
+
+function(cmate_clear_state STATE)
+    file(MAKE_DIRECTORY ${CMATE_STATE_DIR})
+    cmate_state_file(${STATE} FILE)
+    file(REMOVE ${FILE})
+endfunction()
+
+function(cmate_set_state STATE)
+    file(MAKE_DIRECTORY ${CMATE_STATE_DIR})
+    cmate_state_file(${STATE} FILE)
+    file(TOUCH ${FILE})
 endfunction()
 
 function(cmate_load_version)
@@ -215,6 +252,11 @@ function(cmate_load_cmake_package_deps JSON PREFIX)
     set("${PREFIX}_CMAKE_PACKAGES" ${PACKAGES} PARENT_SCOPE)
 endfunction()
 
+function(cmate_load_pkgconfig_package_deps JSON PREFIX)
+    cmate_json_get_array(${JSON} "pkgconfig" "PKGS")
+    set("${PREFIX}_PKGCONFIG_PACKAGES" ${PKGS} PARENT_SCOPE)
+endfunction()
+
 function(cmate_load_conf FILE)
     if(NOT EXISTS ${FILE})
         return()
@@ -230,7 +272,7 @@ function(cmate_load_conf FILE)
     cmate_setg(CMATE_NAMESPACE ${NAMESPACE})
 
     string(JSON PKGS GET ${JSON} "packages")
-    cmate_setg(CMATE_CMAKE_PACKAGES ${PKGS})
+    cmate_setg(CMATE_PACKAGES ${PKGS})
 endfunction()
 
 function(cmate_load_link_deps FILE PREFIX)
@@ -302,7 +344,7 @@ function(cmate_target_link_deps NAME DEPS_FILE VAR)
 endfunction()
 
 function(cmate_target_name NAME TYPE VAR)
-    string(TOLOWER "${NAME}_${TYPE}" TBASE)
+    string(TOLOWER "${CMATE_NAMESPACE}_${NAME}_${TYPE}" TBASE)
     string(REPLACE "-" "_" TBASE ${TBASE})
     set(${VAR} ${TBASE} PARENT_SCOPE)
 endfunction()
@@ -347,7 +389,7 @@ function(cmate_configure_lib NAME TBASE INC_BASE SRC_BASE)
         APPEND
         CONTENT
         "
-set(${VBASE}_INC_DIR \"\${CMAKE_SOURCE_DIR}/${INC_BASE}/${NAME}\")
+set(${VBASE}_INC_DIR \"\${PROJECT_SOURCE_DIR}/${INC_BASE}/${NAME}\")
 file(GLOB_RECURSE ${VBASE}_HEADERS \${${VBASE}_INC_DIR}/${CMATE_HEADER_PAT})
 list(APPEND ${VBASE}_ALL_SOURCES \${${VBASE}_HEADERS})
 
@@ -468,40 +510,16 @@ function(cmate_configure_test NAME TBASE SRC_BASE)
     cmate_configure_prog("test" ${NAME} ${TBASE} ${SRC_BASE})
 endfunction()
 
-function(cmate_configure_project TARGETS SUBDIRS)
-    if(${CMATE_DRY_RUN})
-        return()
-    endif()
-
-    set(CM_FILE "${CMATE_ROOT_DIR}/CMakeLists.txt")
-
-    string(
-        APPEND
-        CONTENT
-        "cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
-
-project(${CMATE_PROJECT} VERSION 1.0.0 LANGUAGES C CXX)
-
-find_package(PkgConfig REQUIRED)
-include(GNUInstallDirs)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-"
-    )
-
-    # Package dependencies
-    cmate_load_cmake_package_deps(${CMATE_CMAKE_PACKAGES} "PRJ")
+function(cmate_configure_project_packages VAR)
+    # CMake style packages
+    cmate_load_cmake_package_deps(${CMATE_PACKAGES} "PRJ")
+    set(CONTENT "")
 
     if(PRJ_CMAKE_PACKAGES)
         string(APPEND CONTENT "\n")
     endif()
 
     foreach(PKG ${PRJ_CMAKE_PACKAGES})
-
-
         if(PRJ_CMAKE_${PKG}_COMPS)
             string(
                 APPEND
@@ -521,6 +539,53 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
             string(APPEND CONTENT "find_package(${PKG} CONFIG REQUIRED)\n")
         endif()
     endforeach()
+
+    # PkgConfig style packages
+    cmate_load_pkgconfig_package_deps(${CMATE_PACKAGES} "PRJ")
+
+    if(PRJ_PKGCONFIG_PACKAGES)
+        string(APPEND CONTENT "find_package(PkgConfig REQUIRED)\n")
+    endif()
+
+    foreach(PKG ${PRJ_PKGCONFIG_PACKAGES})
+        string(
+            APPEND
+            CONTENT
+            "pkg_check_modules(${PKG} REQUIRED IMPORTED_TARGET ${PKG})\n"
+        )
+    endforeach()
+
+    set(${VAR} ${CONTENT} PARENT_SCOPE)
+endfunction()
+
+function(cmate_configure_project TARGETS SUBDIRS)
+    if(${CMATE_DRY_RUN})
+        return()
+    endif()
+
+    set(CM_FILE "${CMATE_ROOT_DIR}/CMakeLists.txt")
+
+    string(
+        APPEND
+        CONTENT
+        "cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+
+project(${CMATE_PROJECT} VERSION 1.0.0 LANGUAGES C CXX)
+
+include(GNUInstallDirs)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+"
+    )
+
+    cmate_configure_project_packages(PKGS)
+
+    if(PKGS)
+        string(APPEND CONTENT "${PKGS}")
+    endif()
 
     # Target subdirs
     if(SUBDIRS)
@@ -607,7 +672,38 @@ function(cmate_configure)
     # Top-level project
     cmate_configure_project("${TARGETS}" "${SUBDIRS}")
 
-    cmate_msg("Project ${CMATE_PROJECT} is ready")
+    cmate_state_file("configured" CONFIGURED)
+
+    if(NOT EXISTS ${CONFIGURED})
+        set(BUILD_DIR "${CMATE_ROOT_DIR}/build")
+        set(STAGE_DIR "${CMATE_ROOT_DIR}/stage")
+        file(MAKE_DIRECTORY ${BUILD_DIR})
+
+        set(ARGS "")
+
+        if (EXISTS "${CMATE_ROOT_DIR}/.cmade")
+            list(APPEND ARGS "-DCMAKE_PREFIX_PATH=${CMATE_ROOT_DIR}/.cmade")
+        endif()
+
+        list(APPEND ARGS "-DCMAKE_INSTALL_PREFIX=${STAGE_DIR}")
+        list(APPEND ARGS "-DCMAKE_BUILD_TYPE:STRING=Release")
+        list(APPEND ARGS "-G Ninja")
+        list(APPEND ARGS "-S ${CMATE_ROOT_DIR}")
+        list(APPEND ARGS "-B ${BUILD_DIR}")
+
+        execute_process(
+            COMMAND
+                ${CMAKE_COMMAND}
+                ${ARGS}
+            WORKING_DIRECTORY "${BUILD_DIR}"
+            RESULTS_VARIABLE RC
+        )
+
+        if(RC)
+            list(JOIN ARGS " " RUN_CMD)
+            cmate_die("command failed: ${RUN_CMD}")
+        endif()
+    endif()
 endfunction()
 
 ##############################################################################
@@ -627,6 +723,10 @@ function(cmate_set_defaults)
     get_filename_component(DIR "." ABSOLUTE)
     cmate_setg(CMATE_ROOT_DIR ${DIR})
     cmake_path(GET DIR FILENAME PROJECT)
+
+    get_filename_component(DIR ".cmate" ABSOLUTE)
+    cmate_setg(CMADE_STATE_DIR ${DIR})
+
     cmate_setg(CMATE_PROJECT ${PROJECT})
     cmate_setg(CMATE_HEADER_PAT "*.hpp")
     cmate_setg(CMATE_SOURCE_PAT "*.[ch]pp")
