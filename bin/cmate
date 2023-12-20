@@ -46,6 +46,7 @@ Options:
 
 Commands:
   configure     Scans and configures targets
+  build
   clean
   help          Display this information
 
@@ -208,17 +209,20 @@ macro(cmate_setv VAR VAL)
 endmacro()
 
 function(cmate_json_get_array JSON KEY VAR)
-    string(JSON ARRAY GET ${JSON} ${KEY})
-    string(JSON N LENGTH ${ARRAY})
+    string(JSON ARRAY ERROR_VARIABLE ERR GET ${JSON} ${KEY})
     set(ITEMS "")
 
-    if(${N} GREATER_EQUAL 1)
-        math(EXPR N "${N}-1")
+    if (NOT ERR)
+        string(JSON N LENGTH ${ARRAY})
 
-        foreach(I RANGE ${N})
-            string(JSON ITEM GET ${ARRAY} ${I})
-            list(APPEND ITEMS ${ITEM})
-        endforeach()
+        if(${N} GREATER_EQUAL 1)
+            math(EXPR N "${N}-1")
+
+            foreach(I RANGE ${N})
+                string(JSON ITEM GET ${ARRAY} ${I})
+                list(APPEND ITEMS ${ITEM})
+            endforeach()
+        endif()
     endif()
 
     set(${VAR} ${ITEMS} PARENT_SCOPE)
@@ -426,7 +430,7 @@ set_target_properties(
     PROPERTIES
         VERSION ${CMATE_VERSION}
         SOVERSION ${CMATE_VERSION_MAJOR}.${CMATE_VERSION_MINOR}
-        OUTPUT_NAME ${NAME}
+        OUTPUT_NAME ${CMATE_NAMESPACE}_${NAME}
 )
 "
     )
@@ -681,15 +685,15 @@ function(cmate_configure)
 
         set(ARGS "")
 
-        if (EXISTS "${CMATE_ROOT_DIR}/.cmade")
-            list(APPEND ARGS "-DCMAKE_PREFIX_PATH=${CMATE_ROOT_DIR}/.cmade")
+        if (EXISTS "${CMATE_CMADE_ENV}")
+            list(APPEND ARGS "-DCMAKE_PREFIX_PATH=${CMATE_CMADE_ENV}")
         endif()
 
         list(APPEND ARGS "-DCMAKE_INSTALL_PREFIX=${STAGE_DIR}")
         list(APPEND ARGS "-DCMAKE_BUILD_TYPE:STRING=Release")
-        list(APPEND ARGS "-G Ninja")
-        list(APPEND ARGS "-S ${CMATE_ROOT_DIR}")
-        list(APPEND ARGS "-B ${BUILD_DIR}")
+        list(APPEND ARGS "-G" "Ninja")
+        list(APPEND ARGS "-S" "${CMATE_ROOT_DIR}")
+        list(APPEND ARGS "-B" "${BUILD_DIR}")
 
         execute_process(
             COMMAND
@@ -703,7 +707,36 @@ function(cmate_configure)
             list(JOIN ARGS " " RUN_CMD)
             cmate_die("command failed: ${RUN_CMD}")
         endif()
+
+        cmate_set_state("configured")
     endif()
+endfunction()
+
+function(cmate_build)
+    cmate_state_file("configured" CONFIGURED)
+
+    if(NOT EXISTS ${CONFIGURED})
+        cmate_die("please configure first")
+    endif()
+
+    set(BUILD_DIR "${CMATE_ROOT_DIR}/build")
+    set(STAGE_DIR "${CMATE_ROOT_DIR}/stage")
+    set(ARGS "")
+
+    list(APPEND ARGS "--build" "${BUILD_DIR}")
+    list(APPEND ARGS "--parallel")
+
+        execute_process(
+            COMMAND
+                ${CMAKE_COMMAND}
+                ${ARGS}
+            RESULTS_VARIABLE RC
+        )
+
+        if(RC)
+            list(JOIN ARGS " " RUN_CMD)
+            cmate_die("command failed: ${RUN_CMD}")
+        endif()
 endfunction()
 
 ##############################################################################
@@ -725,11 +758,13 @@ function(cmate_set_defaults)
     cmake_path(GET DIR FILENAME PROJECT)
 
     get_filename_component(DIR ".cmate" ABSOLUTE)
-    cmate_setg(CMADE_STATE_DIR ${DIR})
+    cmate_setg(CMATE_STATE_DIR ${DIR})
 
     cmate_setg(CMATE_PROJECT ${PROJECT})
     cmate_setg(CMATE_HEADER_PAT "*.hpp")
     cmate_setg(CMATE_SOURCE_PAT "*.[ch]pp")
+
+    cmate_setg(CMATE_CMADE_ENV "${CMATE_ROOT_DIR}/.cmade/env")
 endfunction()
 
 ##############################################################################
@@ -809,6 +844,8 @@ function(cmate_process_cmd)
     elseif (CMATE_CMD STREQUAL "configure")
         cmate_set_version()
         cmate_configure()
+    elseif (CMATE_CMD STREQUAL "build")
+        cmate_build()
     elseif (CMATE_CMD STREQUAL "help")
         cmate_show_help()
     elseif(CMATE_CMD)
