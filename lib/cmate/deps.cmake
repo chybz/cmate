@@ -1,60 +1,90 @@
-function(cmate_load_cmake_package_deps JSON PREFIX)
-    cmate_json_get_array("${JSON}" "cmake" "PKGS")
-    set(PACKAGES "")
-
-    foreach(PKG ${PKGS})
-        set(PKGTYPE "STRING")
-
-        if("${PKG}" MATCHES "^[[{].*$")
-            string(JSON PKGTYPE TYPE ${PKG})
-        endif()
-
-        if(${PKGTYPE} STREQUAL "STRING")
-            # Simple module
-            list(APPEND PACKAGES ${PKG})
-        elseif(${PKGTYPE} STREQUAL "OBJECT")
-            # Module and components
-            string(JSON PKGNAME MEMBER ${PKG} 0)
-            list(APPEND PACKAGES ${PKGNAME})
-
-            cmate_json_get_array(${PKG} ${PKGNAME} "COMPS")
-
-            set("${PREFIX}_CMAKE_${PKGNAME}_COMPS" ${COMPS} PARENT_SCOPE)
-        endif()
-    endforeach()
-
-    set("${PREFIX}_CMAKE_PACKAGES" ${PACKAGES} PARENT_SCOPE)
+function(cmate_dep_set_cache_dir NAME)
+    string(REPLACE "/" "_" DIR ${NAME})
+    set(DIR "${CMATE_CACHE}/deps/${DIR}")
+    cmate_setg(CMATE_DEP_CACHE_DIR ${DIR})
+    cmate_setg(CMATE_DEP_SOURCE_DIR "${DIR}/sources")
+    cmate_setg(CMATE_DEP_BUILD_DIR "${DIR}/build")
+    cmate_setg(CMATE_DEP_STATE_DIR "${DIR}/state")
 endfunction()
 
-function(cmate_load_pkgconfig_package_deps JSON PREFIX)
-    cmate_json_get_array("${JSON}" "pkgconfig" "PKGS")
-    set("${PREFIX}_PKGCONFIG_PACKAGES" ${PKGS} PARENT_SCOPE)
+function(cmate_dep_state_file STATE VAR)
+    set(${VAR} "${CMATE_DEP_STATE_DIR}/.${STATE}" PARENT_SCOPE)
 endfunction()
 
-function(cmate_load_link_deps FILE PREFIX)
-    set(PUBLIC_DEPS "")
-    set(PRIVATE_DEPS "")
-    set(LVAR "PUBLIC_DEPS")
+function(cmate_dep_set_state STATE)
+    file(MAKE_DIRECTORY ${CMATE_DEP_STATE_DIR})
+    cmate_dep_state_file(${STATE} FILE)
+    file(TOUCH ${FILE})
+endfunction()
 
-    if(EXISTS ${FILE})
-        file(READ ${FILE} JSON)
-        string(JSON LIBS GET ${JSON} "libs")
-
-        foreach(TYPE PUBLIC PRIVATE)
-            # TODO: add more checks for correct JSON structure
-            string(TOLOWER ${TYPE} KEY)
-            cmate_json_get_array(${LIBS} ${KEY} "${TYPE}_DEPS")
-        endforeach()
+function(cmate_dep_get_repo HOST REPO REF)
+    if(HOST MATCHES "^\\$\\{(.+)\\}$")
+        # Dereference variable
+        set(HOST ${${CMAKE_MATCH_1}})
     endif()
 
-    set(${PREFIX}_PUBLIC_DEPS ${PUBLIC_DEPS} PARENT_SCOPE)
-    list(LENGTH PUBLIC_DEPS PUBLIC_DEPS_COUNT)
-    set(${PREFIX}_PUBLIC_DEPS_COUNT ${PUBLIC_DEPS_COUNT} PARENT_SCOPE)
+    if(HOST STREQUAL "GH")
+        set(HOST "https://github.com")
+    elseif(TYPE STREQUAL "GL")
+        set(HOST "https://gitlab.com")
+    endif()
 
-    set(${PREFIX}_PRIVATE_DEPS ${PRIVATE_DEPS} PARENT_SCOPE)
-    list(LENGTH PRIVATE_DEPS PRIVATE_DEPS_COUNT)
-    set(${PREFIX}_PRIVATE_DEPS_COUNT ${PRIVATE_DEPS_COUNT} PARENT_SCOPE)
+    set(URL "${HOST}/${REPO}.git")
 
-    math(EXPR DEPS_COUNT "${PUBLIC_DEPS_COUNT} + ${PRIVATE_DEPS_COUNT}")
-    set(${PREFIX}_DEPS_COUNT ${DEPS_COUNT} PARENT_SCOPE)
+    set(GIT_ARGS "clone")
+    list(
+        APPEND GIT_ARGS
+        -c advice.detachedHead=false
+        --depth 1
+    )
+
+    if(REF)
+        list(APPEND GIT_ARGS --branch "${REF}")
+    endif()
+
+    cmate_dep_set_cache_dir(${REPO})
+    cmate_dep_state_file("fetched" FETCHED)
+
+    if(NOT IS_DIRECTORY ${CMATE_DEP_SOURCE_DIR} OR NOT EXISTS ${FETCHED})
+        # Whatever the reason, we're (re-)fetching
+        file(REMOVE_RECURSE ${CMATE_DEP_SOURCE_DIR})
+        cmate_info("cloning ${URL} in ${CMATE_DEP_SOURCE_DIR}")
+        cmate_run_prog(CMD git ${GIT_ARGS} ${URL} ${CMATE_DEP_SOURCE_DIR})
+        cmate_dep_set_state("fetched")
+    endif()
+endfunction()
+
+function(cmate_dep_get_url URL)
+    string(MD5 HASH ${URL})
+
+    if(URL MATCHES "/([^/]+)$")
+        set(FILE ${CMAKE_MATCH_1})
+    else()
+        cmate_die("can't find filename from URL: ${URL}")
+    endif()
+
+    cmate_dep_set_cache_dir(${HASH})
+    cmate_dep_state_file("fetched" FETCHED)
+    cmate_dep_state_file("extracted" EXTRACTED)
+    set(CFILE "${CMATE_DEP_CACHE_DIR}/${FILE}")
+
+    if(NOT EXISTS ${CFILE})
+        cmate_info("downloading ${URL} in ${CDIR}")
+        cmate_download(${URL} ${CFILE})
+        cmate_set_state("fetched")
+    endif()
+
+    if(NOT IS_DIRECTORY ${CMATE_DEP_SOURCE_DIR} OR NOT EXISTS ${EXTRACTED})
+        file(REMOVE_RECURSE ${CMATE_DEP_SOURCE_DIR})
+        cmate_info("extracting ${FILE}")
+        file(
+            ARCHIVE_EXTRACT
+            INPUT ${CFILE}
+            DESTINATION ${CMATE_DEP_SOURCE_DIR}
+        )
+        cmate_dep_set_state("extracted")
+    endif()
+
+    cmate_unique_dir(${CMATE_DEP_SOURCE_DIR} SDIR)
+    cmate_setg(CMATE_DEP_SOURCE_DIR ${SDIR})
 endfunction()

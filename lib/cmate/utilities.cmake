@@ -127,3 +127,57 @@ function(cmate_load_conf FILE)
 
     cmate_setg(CMATE_PACKAGES "${PKGS}")
 endfunction()
+
+function(cmate_run_prog)
+    cmake_parse_arguments(RUN "" "DIR" "CMD" ${ARGN})
+
+    if(CMATE_SIMULATE)
+        list(PREPEND RUN_CMD "echo")
+    endif()
+
+    execute_process(
+        COMMAND ${RUN_CMD}
+        WORKING_DIRECTORY "${RUN_DIR}"
+        RESULTS_VARIABLE RC
+    )
+
+    if(RC)
+        list(JOIN ARGV " " RUN_CMD)
+        cmate_die("command failed: ${RUN_CMD}")
+    endif()
+endfunction()
+
+function(cmate_unique_dir PATH VAR)
+    file(GLOB PATHS "${PATH}/*")
+
+    foreach(PATH ${PATHS})
+        if(IS_DIRECTORY ${PATH})
+            list(APPEND ALL_DIRS ${PATH})
+        endif()
+    endforeach()
+
+    list(LENGTH ALL_DIRS DIRS)
+
+    if(DIRS EQUAL 0)
+        cmate_die("no directories found in ${PATH}")
+    elseif(DIRS GREATER 1)
+        cmate_die("multiple directories found ${PATH}")
+    endif()
+
+    list(GET ALL_DIRS 0 DIR)
+    set(${VAR} ${DIR} PARENT_SCOPE)
+endfunction()
+
+function(cmate_download URL FILE)
+    if(CMATE_SIMULATE)
+        cmate_msg("download ${URL} to ${FILE}")
+    else()
+        file(DOWNLOAD ${URL} ${FILE} STATUS ST)
+    endif()
+
+    list(GET ST 0 RC)
+
+    if(RC)
+        cmate_die("download of ${URL} failed: ${ST}")
+    endif()
+endfunction()
