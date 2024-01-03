@@ -58,3 +58,30 @@ function(cmate_load_link_deps FILE PREFIX)
     math(EXPR DEPS_COUNT "${PUBLIC_DEPS_COUNT} + ${PRIVATE_DEPS_COUNT}")
     set(${PREFIX}_DEPS_COUNT ${DEPS_COUNT} PARENT_SCOPE)
 endfunction()
+
+function(cmate_target_link_deps NAME VAR)
+    cmate_load_link_deps(${CMATE_LIBSFILE} TGT)
+
+    if(${TGT_DEPS_COUNT} GREATER 0)
+        set(TDEPS "\ntarget_link_libraries(\n    ${NAME}")
+
+        foreach(TYPE PUBLIC PRIVATE)
+            if(${TGT_${TYPE}_DEPS_COUNT} GREATER 0)
+                string(APPEND TDEPS "\n    ${TYPE}")
+
+                foreach(DEP ${TGT_${TYPE}_DEPS})
+                    string(APPEND TDEPS "\n        ${DEP}")
+                endforeach()
+            endif()
+        endforeach()
+
+        string(APPEND TDEPS "\n)\n")
+        set(${VAR} ${TDEPS} PARENT_SCOPE)
+    endif()
+endfunction()
+
+function(cmate_target_name NAME TYPE VAR)
+    string(TOLOWER "${CMATE_NAMESPACE}_${NAME}_${TYPE}" TBASE)
+    string(REPLACE "-" "_" TBASE ${TBASE})
+    set(${VAR} ${TBASE} PARENT_SCOPE)
+endfunction()

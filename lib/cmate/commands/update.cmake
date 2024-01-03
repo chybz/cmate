@@ -34,8 +34,8 @@ function(cmate_update_cmake_dep)
         cmate_run_prog(
             CMD
                 ${CMAKE_COMMAND}
-                -DCMAKE_PREFIX_PATH=${CMATE_ENV}
-                -DCMAKE_INSTALL_PREFIX=${CMATE_ENV}
+                -DCMAKE_PREFIX_PATH=${CMATE_ENV_DIR}
+                -DCMAKE_INSTALL_PREFIX=${CMATE_ENV_DIR}
                 -DCMAKE_BUILD_TYPE:STRING=Release
                 ${ARGS}
                 -S ${CMATE_DEP_SOURCE_DIR} -B ${CMATE_DEP_BUILD_DIR}
@@ -68,9 +68,9 @@ function(cmate_update_meson_dep)
             DIR ${CMATE_DEP_BUILD_DIR}
             CMD
                 meson
-                --prefix=${CMATE_ENV}
-                --pkg-config-path=${CMATE_ENV}
-                --cmake-prefix-path=${CMATE_ENV}
+                --prefix=${CMATE_ENV_DIR}
+                --pkg-config-path=${CMATE_ENV_DIR}
+                --cmake-prefix-path=${CMATE_ENV_DIR}
                 ${ARGV}
                 . ${SRCDIR}
         )
@@ -92,7 +92,7 @@ function(cmate_update_autotools_dep)
             DIR ${CMATE_DEP_BUILD_DIR}
             CMD
                 ${CMATE_DEP_SOURCE_DIR}/configure
-                --prefix=${CMATE_ENV}
+                --prefix=${CMATE_ENV_DIR}
                 ${ARGV}
         )
         cmate_dep_set_state("configured")
@@ -121,7 +121,7 @@ function(cmate_update_makefile_dep)
     if(NOT EXISTS ${INSTALLED})
         cmate_run_prog(
             DIR ${CMATE_DEP_SOURCE_DIR}
-            CMD make prefix=${CMATE_ENV} install
+            CMD make prefix=${CMATE_ENV_DIR} install
         )
         cmate_dep_set_state("installed")
     endif()
@@ -164,12 +164,12 @@ function(cmate_update_dep ARGS)
 endfunction()
 
 function(cmate_update_repo HOST REPO TAG ARGS)
-    cmate_fetch_repo(${HOST} ${REPO} "${TAG}")
+    cmate_dep_get_repo(${HOST} ${REPO} "${TAG}")
     cmate_update_dep("${ARGS}")
 endfunction()
 
 function(cmate_update_url URL ARGS)
-    cmate_fetch_url(${URL})
+    cmate_deps_get_url(${URL})
     cmate_update_dep("${ARGS}")
 endfunction()
 

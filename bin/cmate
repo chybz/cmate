@@ -3,10 +3,15 @@
 
 set(CMATE "cmate")
 set(CMATE_VER "X.Y.Z")
-set(CMATE_CONF "cmate.json")
 set(CMATE_TARGETS "")
 set(CMATE_CMDS "")
-set(CMADE_DEPSFILE "deps.txt")
+set(CMATE_DEPSFILE "deps.txt")
+set(CMATE_PRJFILE "project.json")
+set(CMATE_LIBSFILE "link.json")
+set(CMATE_GIT_HOST "GH")
+set(CMATE_GH "https://github.com")
+set(CMATE_GL "https://gitlab.com")
+set(CMATE_BB "https://bitbucket.org")
 cmake_policy(SET CMP0057 NEW)
 
 ## BEGIN CMATE INCLUDES
@@ -36,32 +41,7 @@ endif()
 # Target common functions
 #
 ##############################################################################
-function(cmate_target_link_deps NAME DEPS_FILE VAR)
-    cmate_load_link_deps(${DEPS_FILE} TGT)
 
-    if(${TGT_DEPS_COUNT} GREATER 0)
-        set(TDEPS "\ntarget_link_libraries(\n    ${NAME}")
-
-        foreach(TYPE PUBLIC PRIVATE)
-            if(${TGT_${TYPE}_DEPS_COUNT} GREATER 0)
-                string(APPEND TDEPS "\n    ${TYPE}")
-
-                foreach(DEP ${TGT_${TYPE}_DEPS})
-                    string(APPEND TDEPS "\n        ${DEP}")
-                endforeach()
-            endif()
-        endforeach()
-
-        string(APPEND TDEPS "\n)\n")
-        set(${VAR} ${TDEPS} PARENT_SCOPE)
-    endif()
-endfunction()
-
-function(cmate_target_name NAME TYPE VAR)
-    string(TOLOWER "${CMATE_NAMESPACE}_${NAME}_${TYPE}" TBASE)
-    string(REPLACE "-" "_" TBASE ${TBASE})
-    set(${VAR} ${TBASE} PARENT_SCOPE)
-endfunction()
 
 ##############################################################################
 #
@@ -71,18 +51,15 @@ endfunction()
 function(cmate_set_defaults)
     get_filename_component(DIR "." ABSOLUTE)
     cmate_setg(CMATE_ROOT_DIR ${DIR})
-    cmake_path(GET DIR FILENAME PROJECT)
 
-    get_filename_component(DIR ".cmate" ABSOLUTE)
-    cmate_setg(CMATE_DIR ${DIR})
-    cmate_setg(CMATE_STATE_DIR "${CMATE_ROOT_DIR}/.cmate/state")
-    cmate_setg(CMATE_TOOLCHAINS_DIR "${CMATE_ROOT_DIR}/.cmate/toolchains")
+    get_filename_component(DIR ".cenv" ABSOLUTE)
+    cmate_setg(CMATE_ENV_DIR ${DIR})
+    cmate_setg(CMATE_STATE_DIR "${CMATE_ENV_DIR}/state")
+    cmate_setg(CMATE_STAGE_DIR "${CMATE_ENV_DIR}/stage")
+    cmate_setg(CMATE_TOOLCHAINS_DIR "${CMATE_ENV_DIR}/toolchains")
 
-    cmate_setg(CMATE_PROJECT ${PROJECT})
     cmate_setg(CMATE_HEADER_PAT "*.hpp")
     cmate_setg(CMATE_SOURCE_PAT "*.[ch]pp")
-
-    cmate_setg(CMATE_CMADE_ENV "${CMATE_ROOT_DIR}/.cmade/env")
 endfunction()
 
 ##############################################################################
@@ -114,6 +91,6 @@ endfunction()
 if(CMAKE_SCRIPT_MODE_FILE)
     cmate_set_defaults()
     cmate_parse_arguments()
-    cmate_load_conf("${CMATE_ROOT_DIR}/${CMATE_CONF}")
+    cmate_load_conf("${CMATE_ROOT_DIR}/${CMATE_PRJFILE}")
     cmate_process_cmd()
 endif()
