@@ -1,6 +1,6 @@
 function(cmate_dep_set_cache_dir NAME)
     string(REPLACE "/" "_" DIR ${NAME})
-    set(DIR "${CMATE_ENV_DIR}/cmate/deps/${DIR}")
+    set(DIR "${CMATE_DEPS_DIR}/${DIR}")
     cmate_setg(CMATE_DEP_CACHE_DIR ${DIR})
     cmate_setg(CMATE_DEP_SOURCE_DIR "${DIR}/sources")
     cmate_setg(CMATE_DEP_BUILD_DIR "${DIR}/build")

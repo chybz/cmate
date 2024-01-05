@@ -5,16 +5,25 @@ set(
     "
 Usage: cmate clean
 
-${CMATE_CLEAN_SHORT_HELP}"
+${CMATE_CLEAN_SHORT_HELP}
+
+Options:
+  --purge       Remove everything: cenv, dependencies, ..."
 )
 
 function(cmate_clean)
-    set(BUILD_DIR "${CMATE_ROOT_DIR}/build")
-    cmate_msg("cleaning: ${BUILD_DIR}")
+    set(DIRS "BUILD" "STAGE" "STATE")
 
-    if (IS_DIRECTORY ${BUILD_DIR})
-        file(REMOVE_RECURSE ${BUILD_DIR})
+    if(${CMATE_CLEAN_PURGE})
+        list(APPEND DIRS "ENV" "DEPS")
     endif()
 
-    cmate_clear_states()
+    foreach(DIR ${DIRS})
+        set(DVAR "CMATE_${DIR}_DIR")
+
+        if (IS_DIRECTORY ${${DVAR}})
+            cmate_msg("cleaning: ${${DVAR}}")
+            file(REMOVE_RECURSE ${${DVAR}})
+        endif()
+    endforeach()
 endfunction()

@@ -49,17 +49,18 @@ function(cmate_configure_lib NAME TBASE INC_BASE SRC_BASE)
     set(HDIR "${CMATE_ROOT_DIR}/${INC_BASE}/${NAME}")
     set(SDIR "${CMATE_ROOT_DIR}/${SRC_BASE}/${NAME}")
     set(CM_FILE "${SDIR}/CMakeLists.txt")
-    set(DEPS_FILE "${SDIR}/cmate.json")
+    set(LINK_FILE "${SDIR}/${CMATE_LINKFILE}")
+
     file(GLOB_RECURSE HEADERS "${HDIR}/${CMATE_HEADER_PAT}")
     file(GLOB_RECURSE SOURCES "${SDIR}/${CMATE_SOURCE_PAT}")
 
     string(APPEND CONTENT "add_library(${TBASE})\n")
 
-    if(CMATE_NAMESPACE)
+    if(CMATE_PROJECT_NAMESPACE)
         string(
             APPEND
             CONTENT
-            "add_library(${CMATE_NAMESPACE}::${NAME} ALIAS ${TBASE})\n"
+            "add_library(${CMATE_PROJECT_NAMESPACE}::${NAME} ALIAS ${TBASE})\n"
         )
     endif()
 
@@ -85,14 +86,14 @@ target_include_directories(
     ${TBASE}
     PUBLIC
         $<BUILD_INTERFACE:\${${VBASE}_INC_DIR}>
-        $<INSTALL_INTERFACE:\${CMAKE_INSTALL_INCLUDEDIR}/${CMATE_NAMESPACE}>
+        $<INSTALL_INTERFACE:\${CMAKE_INSTALL_INCLUDEDIR}/${CMATE_PROJECT_NAMESPACE}>
     PRIVATE
         \${CMAKE_CURRENT_SOURCE_DIR}
 )
 "
     )
 
-    cmate_target_link_deps(${TBASE} ${DEPS_FILE} DEPS)
+    cmate_target_link_deps(${TBASE} ${LINK_FILE} DEPS)
     string(APPEND CONTENT ${DEPS})
 
     string(
@@ -102,10 +103,10 @@ target_include_directories(
 set_target_properties(
     ${TBASE}
     PROPERTIES
-        VERSION ${CMATE_VERSION}
-        SOVERSION ${CMATE_VERSION_MAJOR}.${CMATE_VERSION_MINOR}
+        VERSION ${CMATE_PROJECT_VERSION}
+        SOVERSION ${CMATE_PROJECT_VERSION_MAJOR}.${CMATE_PROJECT_VERSION_MINOR}
         EXPORT_NAME ${NAME}
-        OUTPUT_NAME ${CMATE_NAMESPACE}_${NAME}
+        OUTPUT_NAME ${CMATE_PROJECT_NAMESPACE}_${NAME}
 )
 "
     )
@@ -127,7 +128,7 @@ function(cmate_configure_prog TYPE NAME TBASE SRC_BASE)
 
     set(SDIR "${CMATE_ROOT_DIR}/${SRC_BASE}/${NAME}")
     set(CM_FILE "${SDIR}/CMakeLists.txt")
-    set(DEPS_FILE "${SDIR}/cmate.json")
+    set(LINK_FILE "${SDIR}/${CMATE_LINKFILE}")
     file(GLOB_RECURSE SOURCES "${SDIR}/${CMATE_SOURCE_PAT}")
 
     string(APPEND CONTENT "add_${TYPE}(${TBASE})\n")
@@ -154,7 +155,7 @@ target_include_directories(
 "
     )
 
-    cmate_target_link_deps(${TBASE} ${DEPS_FILE} DEPS)
+    cmate_target_link_deps(${TBASE} ${LINK_FILE} DEPS)
     string(APPEND CONTENT ${DEPS})
 
     string(
@@ -244,7 +245,7 @@ function(cmate_configure_project TARGETS SUBDIRS)
         CONTENT
         "cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(${CMATE_PROJECT} VERSION 1.0.0 LANGUAGES C CXX)
+project(${CMATE_PROJECT_NAME} VERSION ${CMATE_PROJECT_VERSION} LANGUAGES C CXX)
 
 include(GNUInstallDirs)
 
@@ -286,17 +287,17 @@ install(
         APPEND
         CONTENT
         "
-    EXPORT ${CMATE_PROJECT}-config
+    EXPORT ${CMATE_PROJECT_NAME}-config
     RUNTIME DESTINATION \${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION \${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION \${CMAKE_INSTALL_LIBDIR}
 )
 
 install(
-    EXPORT ${CMATE_PROJECT}-config
-    FILE ${CMATE_PROJECT}-config.cmake
-    NAMESPACE ${CMATE_NAMESPACE}::
-    DESTINATION \${CMAKE_INSTALL_LIBDIR}/cmake/${CMATE_PROJECT}
+    EXPORT ${CMATE_PROJECT_NAME}-config
+    FILE ${CMATE_PROJECT_NAME}-config.cmake
+    NAMESPACE ${CMATE_PROJECT_NAMESPACE}::
+    DESTINATION \${CMAKE_INSTALL_LIBDIR}/cmake/${CMATE_PROJECT_NAME}
 )
 "
     )
@@ -309,7 +310,7 @@ install(
                 "
 install(
     DIRECTORY \"\${PROJECT_SOURCE_DIR}/include/${LIB}/\"
-    DESTINATION \${CMAKE_INSTALL_INCLUDEDIR}/${CMATE_NAMESPACE}
+    DESTINATION \${CMAKE_INSTALL_INCLUDEDIR}/${CMATE_PROJECT_NAMESPACE}
 )
 "
             )
@@ -369,8 +370,8 @@ function(cmate_configure)
 
         set(ARGS "")
 
-        if (EXISTS "${CMATE_CMADE_ENV}")
-            list(APPEND ARGS "-DCMAKE_PREFIX_PATH=${CMATE_CMADE_ENV}")
+        if (EXISTS "${CMATE_ENV_DIR}")
+            list(APPEND ARGS "-DCMAKE_PREFIX_PATH=${CMATE_ENV_DIR}")
         endif()
 
         list(APPEND ARGS "-DCMAKE_INSTALL_PREFIX=${STAGE_DIR}")

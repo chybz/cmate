@@ -36,6 +36,11 @@ function(cmate_parse_arguments)
         if ("${CMAKE_ARGV${CMATE_POS}}" MATCHES "^--?([A-Za-z0-9_-]+)(=(.+))?$")
             #cmate_check_option(${CMAKE_MATCH_1} "${OPTS}" ${OPTS_LABEL})
             set(OPT "CMATE")
+
+            if(CMATE_CMD)
+                string(APPEND OPT "_${CMATE_CMD}")
+            endif()
+
             string(APPEND OPT "_${CMAKE_MATCH_1}")
             string(REPLACE "-" "_" OPT "${OPT}")
             string(TOUPPER ${OPT} OPT)

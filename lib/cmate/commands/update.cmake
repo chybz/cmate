@@ -13,9 +13,9 @@ function(cmate_update_cmake_dep)
     cmate_dep_state_file("built" BUILT)
     cmate_dep_state_file("installed" INSTALLED)
 
-    cmate_msg("building with: ${ARGV}")
-
     if(NOT EXISTS ${CONFIGURED})
+        cmate_msg("building with: ${ARGV}")
+
         set(ARGS "")
 
         find_program(CMATE_CCACHE ccache)
@@ -27,10 +27,6 @@ function(cmate_update_cmake_dep)
 
         find_program(CMATE_NINJA ninja)
 
-        if(CMATE_NINJA)
-            list(APPEND ARGS "-G" "Ninja")
-        endif()
-
         cmate_run_prog(
             CMD
                 ${CMAKE_COMMAND}
@@ -41,19 +37,25 @@ function(cmate_update_cmake_dep)
                 -S ${CMATE_DEP_SOURCE_DIR} -B ${CMATE_DEP_BUILD_DIR}
                 ${ARGV}
         )
-        cmate_set_state("configured")
+        cmate_dep_set_state("configured")
     endif()
     if(NOT EXISTS ${BUILT})
         cmate_run_prog(
             CMD
                 ${CMAKE_COMMAND}
+                --config Release
                 --build ${CMATE_DEP_BUILD_DIR}
                 --parallel
-            )
+        )
         cmate_dep_set_state("built")
     endif()
     if(NOT EXISTS ${INSTALLED})
-        cmate_run_prog(CMD ${CMAKE_COMMAND} --install ${CMATE_DEP_BUILD_DIR})
+        cmate_run_prog(
+            CMD
+                ${CMAKE_COMMAND}
+                --config Release
+                --install ${CMATE_DEP_BUILD_DIR}
+        )
         cmate_dep_set_state("installed")
     endif()
 endfunction()
