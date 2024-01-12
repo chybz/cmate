@@ -71,7 +71,7 @@ function(cmate_dep_get_url URL)
     if(NOT EXISTS ${CFILE})
         cmate_info("downloading ${URL} in ${CDIR}")
         cmate_download(${URL} ${CFILE})
-        cmate_set_state("fetched")
+        cmate_dep_set_state("fetched")
     endif()
 
     if(NOT IS_DIRECTORY ${CMATE_DEP_SOURCE_DIR} OR NOT EXISTS ${EXTRACTED})

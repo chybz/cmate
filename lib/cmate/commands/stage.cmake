@@ -5,24 +5,19 @@ set(
     "
 Usage: cmate stage
 
-${CMATE_STAGE_SHORT_HELP}"
+${CMATE_STAGE_SHORT_HELP}
+
+Options:
+  --release       Stage release build"
 )
 
 function(cmate_stage)
-    set(BUILD_DIR "${CMATE_ROOT_DIR}/build")
+    cmate_set_build_type(CMATE_STAGE_RELEASE)
+    cmate_build()
+
     set(ARGS "")
 
-    list(APPEND ARGS "--install" "${BUILD_DIR}")
+    list(APPEND ARGS "--install" "${CMATE_BUILD_DIR}")
 
-    execute_process(
-        COMMAND
-            ${CMAKE_COMMAND}
-            ${ARGS}
-        RESULTS_VARIABLE RC
-    )
-
-    if(RC)
-        list(JOIN ARGS " " RUN_CMD)
-        cmate_die("command failed: ${RUN_CMD}")
-    endif()
+    cmate_run_prog(CMD ${CMAKE_COMMAND} ${ARGS})
 endfunction()

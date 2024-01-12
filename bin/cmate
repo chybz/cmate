@@ -54,14 +54,14 @@ function(cmate_set_defaults)
 
     get_filename_component(DIR ".cenv" ABSOLUTE)
     cmate_setg(CMATE_ENV_DIR ${DIR})
+    cmate_setg(CMATE_DEPS_DIR "${CMATE_ENV_DIR}/deps")
 
     get_filename_component(DIR ".cmate" ABSOLUTE)
     cmate_setg(CMATE_HOME_DIR ${DIR})
-    cmate_setg(CMATE_DEPS_DIR "${CMATE_HOME_DIR}/deps")
     cmate_setg(CMATE_STATE_DIR "${CMATE_HOME_DIR}/state")
     cmate_setg(CMATE_TOOLCHAINS_DIR "${CMATE_HOME_DIR}/toolchains")
 
-    cmate_setg(CMATE_BUILD_DIR "${CMATE_ROOT_DIR}/build")
+    cmate_setg(CMATE_BUILD_BASE_DIR "${CMATE_ROOT_DIR}/build")
     cmate_setg(CMATE_STAGE_DIR "${CMATE_ROOT_DIR}/stage")
 
     cmate_setg(CMATE_HEADER_PAT "*.hpp")

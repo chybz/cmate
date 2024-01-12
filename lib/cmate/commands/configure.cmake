@@ -253,6 +253,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+if(WIN32)
+  add_definitions(-DUNICODE -D_UNICODE -DSTRICT -DNOMINMAX)
+  add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_SCL_SECURE_NO_WARNINGS)
+endif()
 "
     )
 
@@ -320,6 +325,49 @@ install(
     file(WRITE ${CM_FILE} ${CONTENT})
 endfunction()
 
+function(cmate_configure_run_cmake TYPE)
+    string(TOLOWER ${TYPE} TDIR)
+    set(BUILD_DIR "${CMATE_ROOT_DIR}/build/${TDIR}")
+    set(STAGE_DIR "${CMATE_ROOT_DIR}/stage/${TDIR}")
+
+    if (IS_DIRECTORY ${BUILD_DIR})
+        return()
+    endif()
+
+    file(MAKE_DIRECTORY ${BUILD_DIR})
+
+    set(ARGS "")
+
+    if (EXISTS "${CMATE_ENV_DIR}")
+        list(APPEND ARGS "-DCMAKE_PREFIX_PATH=${CMATE_ENV_DIR}")
+    endif()
+
+    list(APPEND ARGS "-DCMAKE_INSTALL_PREFIX=${STAGE_DIR}")
+    list(APPEND ARGS "-DCMAKE_BUILD_TYPE=${TYPE}")
+
+    find_program(CMATE_CCACHE ccache)
+
+    if(CMATE_CCACHE)
+        list(APPEND ARGS "-DCMAKE_C_COMPILER_LAUNCHER=${CMATE_CCACHE}")
+        list(APPEND ARGS "-DCMAKE_CXX_COMPILER_LAUNCHER=${CMATE_CCACHE}")
+    endif()
+
+    find_program(CMATE_NINJA ninja)
+
+    if(CMATE_NINJA)
+        list(APPEND ARGS "-G" "Ninja")
+    endif()
+
+    if(CMATE_TOOLCHAIN)
+        list(APPEND ARGS "--toolchain" "${CMATE_TOOLCHAIN}")
+    endif()
+
+    list(APPEND ARGS "-S" "${CMATE_ROOT_DIR}")
+    list(APPEND ARGS "-B" "${BUILD_DIR}")
+
+    cmate_run_prog(CMD ${CMAKE_COMMAND} ${ARGS})
+endfunction()
+
 function(cmate_configure)
     # Find libraries (libraries have headers)
     file(GLOB LIB_INC_DIRS "${CMATE_ROOT_DIR}/include/*")
@@ -360,56 +408,6 @@ function(cmate_configure)
 
     # Top-level project
     cmate_configure_project("${TARGETS}" "${SUBDIRS}")
-
-    cmate_state_file("configured" CONFIGURED)
-
-    if(NOT EXISTS ${CONFIGURED})
-        set(BUILD_DIR "${CMATE_ROOT_DIR}/build")
-        set(STAGE_DIR "${CMATE_ROOT_DIR}/stage")
-        file(MAKE_DIRECTORY ${BUILD_DIR})
-
-        set(ARGS "")
-
-        if (EXISTS "${CMATE_ENV_DIR}")
-            list(APPEND ARGS "-DCMAKE_PREFIX_PATH=${CMATE_ENV_DIR}")
-        endif()
-
-        list(APPEND ARGS "-DCMAKE_INSTALL_PREFIX=${STAGE_DIR}")
-        list(APPEND ARGS "-DCMAKE_BUILD_TYPE:STRING=Release")
-
-        find_program(CMATE_CCACHE ccache)
-
-        if(CMATE_CCACHE)
-            list(APPEND ARGS "-DCMAKE_C_COMPILER_LAUNCHER=${CMATE_CCACHE}")
-            list(APPEND ARGS "-DCMAKE_CXX_COMPILER_LAUNCHER=${CMATE_CCACHE}")
-        endif()
-
-        find_program(CMATE_NINJA ninja)
-
-        if(CMATE_NINJA)
-            list(APPEND ARGS "-G" "Ninja")
-        endif()
-
-        if(CMATE_TOOLCHAIN)
-            list(APPEND ARGS "--toolchain" "${CMATE_TOOLCHAIN}")
-        endif()
-
-        list(APPEND ARGS "-S" "${CMATE_ROOT_DIR}")
-        list(APPEND ARGS "-B" "${BUILD_DIR}")
-
-        execute_process(
-            COMMAND
-                ${CMAKE_COMMAND}
-                ${ARGS}
-            WORKING_DIRECTORY "${BUILD_DIR}"
-            RESULTS_VARIABLE RC
-        )
-
-        if(RC)
-            list(JOIN ARGS " " RUN_CMD)
-            cmate_die("command failed: ${RUN_CMD}")
-        endif()
-
-        cmate_set_state("configured")
-    endif()
+    cmate_configure_run_cmake("Debug")
+    cmate_configure_run_cmake("Release")
 endfunction()

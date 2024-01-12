@@ -32,7 +32,7 @@ function(cmate_update_cmake_dep)
                 ${CMAKE_COMMAND}
                 -DCMAKE_PREFIX_PATH=${CMATE_ENV_DIR}
                 -DCMAKE_INSTALL_PREFIX=${CMATE_ENV_DIR}
-                -DCMAKE_BUILD_TYPE:STRING=Release
+                -DCMAKE_BUILD_TYPE=Release
                 ${ARGS}
                 -S ${CMATE_DEP_SOURCE_DIR} -B ${CMATE_DEP_BUILD_DIR}
                 ${ARGV}
@@ -43,8 +43,8 @@ function(cmate_update_cmake_dep)
         cmate_run_prog(
             CMD
                 ${CMAKE_COMMAND}
-                --config Release
                 --build ${CMATE_DEP_BUILD_DIR}
+                --config Release
                 --parallel
         )
         cmate_dep_set_state("built")
@@ -53,8 +53,8 @@ function(cmate_update_cmake_dep)
         cmate_run_prog(
             CMD
                 ${CMAKE_COMMAND}
-                --config Release
                 --install ${CMATE_DEP_BUILD_DIR}
+                --config Release
         )
         cmate_dep_set_state("installed")
     endif()
