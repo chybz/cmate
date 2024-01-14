@@ -31,8 +31,9 @@ if(CMAKE_SCRIPT_MODE_FILE AND NOT CMAKE_PARENT_LIST_FILE)
     include(cmate/commands/rebuild)
     include(cmate/commands/stage)
     include(cmate/commands/clean)
-    include(cmate/commands/update)
+    include(cmate/commands/install)
     include(cmate/commands/help)
+    include(cmate/commands/ninja)
 endif()
 ## END CMATE INCLUDES
 
@@ -54,7 +55,7 @@ function(cmate_set_defaults)
 
     get_filename_component(DIR ".cenv" ABSOLUTE)
     cmate_setg(CMATE_ENV_DIR ${DIR})
-    cmate_setg(CMATE_DEPS_DIR "${CMATE_ENV_DIR}/deps")
+    cmate_setg(CMATE_DL_DIR "${CMATE_ENV_DIR}/downloads")
 
     get_filename_component(DIR ".cmate" ABSOLUTE)
     cmate_setg(CMATE_HOME_DIR ${DIR})
@@ -63,6 +64,8 @@ function(cmate_set_defaults)
 
     cmate_setg(CMATE_BUILD_BASE_DIR "${CMATE_ROOT_DIR}/build")
     cmate_setg(CMATE_STAGE_DIR "${CMATE_ROOT_DIR}/stage")
+
+    cmate_setg(CMATE_TMP_DIR "${CMATE_HOME_DIR}/tmp")
 
     cmate_setg(CMATE_HEADER_PAT "*.hpp")
     cmate_setg(CMATE_SOURCE_PAT "*.[ch]pp")

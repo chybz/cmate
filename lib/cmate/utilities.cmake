@@ -175,3 +175,61 @@ function(cmate_set_build_type RELEASE_FLAG_VAR)
     string(TOLOWER ${TYPE} TDIR)
     cmate_setg(CMATE_BUILD_DIR "${CMATE_BUILD_BASE_DIR}/${TDIR}")
 endfunction()
+
+function(cmate_github_get_latest REPO VAR RE)
+    set(URL "https://api.github.com/repos/${REPO}/releases/latest")
+    set(TDIR "${CMATE_TMP_DIR}/${REPO}")
+    set(INFO "${TDIR}/info.json")
+
+    if (NOT EXISTS ${INFO})
+        file(MAKE_DIRECTORY ${TDIR})
+        cmate_msg("NINJA: dl ${URL} to ${INFO}")
+        cmate_download(${URL} ${INFO})
+    endif()
+
+    file(READ ${INFO} VINFO)
+    cmate_json_get_array(${VINFO} "assets" ASSETS)
+
+    foreach(ASSET ${ASSETS})
+        string(
+            JSON
+            BDURL
+            ERROR_VARIABLE ERR
+            GET "${ASSET}" "browser_download_url"
+        )
+
+        if(NOT ERR AND ${BDURL} MATCHES ${RE})
+            string(JSON FILE GET "${ASSET}" "name")
+            set(FILE "${CMATE_DL_DIR}/${FILE}")
+
+            if (NOT EXISTS ${FILE})
+                cmate_download(${BDURL} ${FILE})
+            endif()
+
+            set(${VAR} ${FILE} PARENT_SCOPE)
+            return()
+        endif()
+    endforeach()
+endfunction()
+
+function(cmate_check_ninja)
+    find_program(CMATE_NINJA ninja)
+
+    if(CMATE_NINJA)
+        cmate_msg("ninja found at ${CMATE_NINJA}")
+    else()
+        set(NOS "")
+
+        if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+            set(NOS "linux")
+        elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+            set(NOS "win")
+        elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+            set(NOS "mac")
+        else()
+            cmate_die("unsupported ninja for ${CMAKE_SYSTEM_NAME}")
+        endif()
+
+        cmate_github_get_latest("ninja-build/ninja" NZIP "ninja-${NOS}.zip$")
+    endif()
+endfunction()
