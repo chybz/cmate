@@ -19,6 +19,8 @@ Usage: cmate configure [OPTIONS]
 ${CMATE_CONFIGURE_SHORT_HELP}
 
 Options:
+  --debug                Configure for debug (default: debug, release)
+  --release              Configure for release (default: debug, release)
   --toolchain=FILE       CMake toolchain file
   --dry-run              Don't touch anything
   --dump                 Dump generated CMakeLists.txt
@@ -324,50 +326,7 @@ install(
     file(WRITE ${CM_FILE} ${CONTENT})
 endfunction()
 
-function(cmate_configure_run_cmake TYPE)
-    string(TOLOWER ${TYPE} TDIR)
-    set(BUILD_DIR "${CMATE_ROOT_DIR}/build/${TDIR}")
-    set(STAGE_DIR "${CMATE_ROOT_DIR}/stage/${TDIR}")
-
-    if (IS_DIRECTORY ${BUILD_DIR})
-        return()
-    endif()
-
-    file(MAKE_DIRECTORY ${BUILD_DIR})
-
-    set(ARGS "")
-
-    if (EXISTS "${CMATE_ENV_DIR}")
-        list(APPEND ARGS "-DCMAKE_PREFIX_PATH=${CMATE_ENV_DIR}")
-    endif()
-
-    list(APPEND ARGS "-DCMAKE_INSTALL_PREFIX=${STAGE_DIR}")
-    list(APPEND ARGS "-DCMAKE_BUILD_TYPE=${TYPE}")
-
-    find_program(CMATE_CCACHE ccache)
-
-    if(CMATE_CCACHE)
-        list(APPEND ARGS "-DCMAKE_C_COMPILER_LAUNCHER=${CMATE_CCACHE}")
-        list(APPEND ARGS "-DCMAKE_CXX_COMPILER_LAUNCHER=${CMATE_CCACHE}")
-    endif()
-
-    find_program(CMATE_NINJA ninja)
-
-    if(CMATE_NINJA)
-        list(APPEND ARGS "-G" "Ninja")
-    endif()
-
-    if(CMATE_TOOLCHAIN)
-        list(APPEND ARGS "--toolchain" "${CMATE_TOOLCHAIN}")
-    endif()
-
-    list(APPEND ARGS "-S" "${CMATE_ROOT_DIR}")
-    list(APPEND ARGS "-B" "${BUILD_DIR}")
-
-    cmate_run_prog(CMD ${CMAKE_COMMAND} ${ARGS})
-endfunction()
-
-function(cmate_configure)
+function(cmate_configure_generate)
     # Find libraries (libraries have headers)
     file(GLOB LIB_INC_DIRS "${CMATE_ROOT_DIR}/include/*")
     set(TARGETS "")
@@ -407,6 +366,71 @@ function(cmate_configure)
 
     # Top-level project
     cmate_configure_project("${TARGETS}" "${SUBDIRS}")
-    cmate_configure_run_cmake("Debug")
-    cmate_configure_run_cmake("Release")
+endfunction()
+
+function(cmate_configure_cmake_common_args VAR)
+    set(ARGS "")
+
+    if (EXISTS "${CMATE_ENV_DIR}")
+        list(APPEND ARGS "-DCMAKE_PREFIX_PATH=${CMATE_ENV_DIR}")
+    endif()
+
+    list(APPEND ARGS "-DCMAKE_INSTALL_PREFIX=${CMATE_ROOT_DIR}/stage")
+
+    find_program(CMATE_CCACHE ccache)
+
+    if(CMATE_CCACHE)
+        list(APPEND ARGS "-DCMAKE_C_COMPILER_LAUNCHER=${CMATE_CCACHE}")
+        list(APPEND ARGS "-DCMAKE_CXX_COMPILER_LAUNCHER=${CMATE_CCACHE}")
+    endif()
+
+    set(${VAR} ${ARGS} PARENT_SCOPE)
+endfunction()
+
+function(cmate_configure_run_cmake_multi)
+    cmate_configure_cmake_common_args(ARGS)
+
+    cmate_join_escape_list(CMATE_BUILD_TYPES TYPES)
+
+    list(APPEND ARGS "-DCMAKE_CONFIGURATION_TYPES=${TYPES}")
+    list(APPEND ARGS "-S" "${CMATE_ROOT_DIR}")
+    list(APPEND ARGS "-B" "${CMATE_BUILD_DIR}")
+
+    if(CMATE_NINJA)
+        list(APPEND ARGS "-G" "Ninja Multi-Config")
+    endif()
+
+    cmate_run_prog(CMD ${CMAKE_COMMAND} ${ARGS})
+endfunction()
+
+function(cmate_configure_run_cmake TYPE)
+    cmate_configure_cmake_common_args(ARGS)
+
+    list(APPEND ARGS "-DCMAKE_BUILD_TYPE=${TYPE}")
+    list(APPEND ARGS "-S" "${CMATE_ROOT_DIR}")
+    list(APPEND ARGS "-B" "${CMATE_BUILD_DIR}/${TYPE}")
+
+    if(CMATE_TOOLCHAIN)
+        list(APPEND ARGS "--toolchain" "${CMATE_TOOLCHAIN}")
+    endif()
+
+    cmate_run_prog(CMD ${CMAKE_COMMAND} ${ARGS})
+endfunction()
+
+function(cmate_configure)
+    cmate_set_build_types(
+        CMATE_CONFIGURE_DEBUG
+        CMATE_CONFIGURE_RELEASE
+        "Debug;Release"
+    )
+
+    cmate_check_ninja()
+
+    if(CMATE_NINJA OR WIN32)
+        cmate_configure_run_cmake_multi()
+    else()
+        foreach(TYPE ${CMATE_BUILD_TYPES})
+            cmate_configure_run_cmake(${TYPE})
+        endforeach()
+    endif()
 endfunction()

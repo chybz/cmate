@@ -33,7 +33,6 @@ if(CMAKE_SCRIPT_MODE_FILE AND NOT CMAKE_PARENT_LIST_FILE)
     include(cmate/commands/clean)
     include(cmate/commands/install)
     include(cmate/commands/help)
-    include(cmate/commands/ninja)
 endif()
 ## END CMATE INCLUDES
 
@@ -55,20 +54,45 @@ function(cmate_set_defaults)
 
     get_filename_component(DIR ".cenv" ABSOLUTE)
     cmate_setg(CMATE_ENV_DIR ${DIR})
-    cmate_setg(CMATE_DL_DIR "${CMATE_ENV_DIR}/downloads")
+    cmate_setgdir(CMATE_ENV_BIN_DIR "${DIR}/bin")
+    cmate_setgdir(CMATE_DL_DIR "${CMATE_ENV_DIR}/downloads")
 
     get_filename_component(DIR ".cmate" ABSOLUTE)
     cmate_setg(CMATE_HOME_DIR ${DIR})
     cmate_setg(CMATE_STATE_DIR "${CMATE_HOME_DIR}/state")
     cmate_setg(CMATE_TOOLCHAINS_DIR "${CMATE_HOME_DIR}/toolchains")
 
-    cmate_setg(CMATE_BUILD_BASE_DIR "${CMATE_ROOT_DIR}/build")
+    cmate_setg(CMATE_BUILD_DIR "${CMATE_ROOT_DIR}/build")
     cmate_setg(CMATE_STAGE_DIR "${CMATE_ROOT_DIR}/stage")
 
     cmate_setg(CMATE_TMP_DIR "${CMATE_HOME_DIR}/tmp")
 
     cmate_setg(CMATE_HEADER_PAT "*.hpp")
     cmate_setg(CMATE_SOURCE_PAT "*.[ch]pp")
+endfunction()
+
+function(cmate_set_compilers)
+    set(CC "$ENV{CMATE_CC}")
+
+    if(CMATE_CC)
+        set(CC "${CMATE_CC}")
+    endif()
+
+    if(CC)
+        if(${CC} MATCHES "^gcc(.*)$")
+            set(CXX "g++${CMAKE_MATCH_1}")
+        elseif(${CC} MATCHES "^clang(.*)$")
+            set(CXX "clang++${CMAKE_MATCH_1}")
+        else()
+            set(CXX "${CC}")
+        endif()
+
+        cmate_msg("using compilers CC=${CC} CXX=${CXX}")
+        cmate_setg(CMAKE_C_COMPILER "${CC}")
+        cmate_setg(CMAKE_CXX_COMPILER "${CXX}")
+        set(ENV{CC} "${CC}")
+        set(ENV{CXX} "${CXX}")
+    endif()
 endfunction()
 
 ##############################################################################
@@ -100,6 +124,7 @@ endfunction()
 if(CMAKE_SCRIPT_MODE_FILE)
     cmate_set_defaults()
     cmate_parse_arguments()
+    cmate_set_compilers()
     cmate_load_conf("${CMATE_ROOT_DIR}/${CMATE_PRJFILE}")
     cmate_process_cmd()
 endif()

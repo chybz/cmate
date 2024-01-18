@@ -5,6 +5,7 @@ list(
     APPEND
     CMATE_OPTIONS
     "verbose"
+    "cc"
 )
 
 function(cmate_build_help VAR)
@@ -14,7 +15,9 @@ function(cmate_build_help VAR)
 Usage: cmate [OPTIONS] COMMAND
 
 Options:
-  --verbose     Verbose operation
+  --verbose    Verbose operation
+  --cc=ID      Compiler suite to use (overrides CMATE_CC)
+               (e.g.: gcc, clang, gcc-10, clang-16, cl)
 
 Commands:
 "

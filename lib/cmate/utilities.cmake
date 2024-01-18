@@ -21,6 +21,11 @@ function(cmate_setg VAR VAL)
     set(${VAR} "${VAL}" CACHE INTERNAL "${VAR}")
 endfunction()
 
+function(cmate_setgdir VAR VAL)
+    cmate_setg(${VAR} "${VAL}")
+    file(MAKE_DIRECTORY ${${VAR}})
+endfunction()
+
 function(cmate_load_version)
     if(NOT "${CMATE_VERSION}" STREQUAL "")
         return()
@@ -107,12 +112,19 @@ function(cmate_load_conf FILE)
     cmate_setg(CMATE_PACKAGES "${PKGS}")
 endfunction()
 
+function(cmate_join_escape_list LVAR OVAR)
+    list(JOIN ${LVAR} "_semicolon_" ESCAPED)
+    set(${OVAR} ${ESCAPED} PARENT_SCOPE)
+endfunction()
+
+macro(cmate_unescape_list LVAR)
+    list(TRANSFORM ${LVAR} REPLACE "_semicolon_" "\\\;")
+endmacro()
+
 function(cmate_run_prog)
     cmake_parse_arguments(RUN "" "DIR" "CMD" ${ARGN})
 
-    if(CMATE_SIMULATE)
-        list(PREPEND RUN_CMD "echo")
-    endif()
+    cmate_unescape_list(RUN_CMD)
 
     execute_process(
         COMMAND ${RUN_CMD}
@@ -161,19 +173,28 @@ function(cmate_download URL FILE)
     endif()
 endfunction()
 
-function(cmate_set_build_type RELEASE_FLAG_VAR)
-    if(CMATE_BUILD_DIR)
+function(cmate_set_build_types DEBUGVAR RELEASEVAR DEFAULTS)
+    if(CMATE_BUILD_TYPES)
+        # Already configured
         return()
     endif()
 
-    if(${RELEASE_FLAG_VAR})
-        set(TYPE "Release")
+    set(TYPES "")
+
+    if(NOT "${${DEBUGVAR}}" AND NOT "${${RELEASEVAR}}")
+        set(TYPES ${DEFAULTS})
     else()
-        set(TYPE "Debug")
+        foreach(TYPE "Debug" "Release")
+            string(TOUPPER "${TYPE}VAR" TVAR)
+            set(TVAR "${${TVAR}}")
+
+            if("${${TVAR}}")
+                list(APPEND TYPES "${TYPE}")
+            endif()
+        endforeach()
     endif()
 
-    string(TOLOWER ${TYPE} TDIR)
-    cmate_setg(CMATE_BUILD_DIR "${CMATE_BUILD_BASE_DIR}/${TDIR}")
+    cmate_setg(CMATE_BUILD_TYPES "${TYPES}")
 endfunction()
 
 function(cmate_github_get_latest REPO VAR RE)
@@ -183,7 +204,6 @@ function(cmate_github_get_latest REPO VAR RE)
 
     if (NOT EXISTS ${INFO})
         file(MAKE_DIRECTORY ${TDIR})
-        cmate_msg("NINJA: dl ${URL} to ${INFO}")
         cmate_download(${URL} ${INFO})
     endif()
 
@@ -207,29 +227,47 @@ function(cmate_github_get_latest REPO VAR RE)
             endif()
 
             set(${VAR} ${FILE} PARENT_SCOPE)
-            return()
+            break()
         endif()
     endforeach()
+
+    file(REMOVE_RECURSE ${TDIR})
 endfunction()
 
 function(cmate_check_ninja)
-    find_program(CMATE_NINJA ninja)
+    find_program(NINJA ninja)
+    set(TDIR "${CMATE_TMP_DIR}/ninja")
 
-    if(CMATE_NINJA)
-        cmate_msg("ninja found at ${CMATE_NINJA}")
-    else()
+    if(NOT NINJA)
         set(NOS "")
+        set(NCMD "ninja")
 
-        if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+        if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux")
             set(NOS "linux")
-        elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+        elseif(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Windows")
             set(NOS "win")
-        elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+            set(NCMD "ninja.exe")
+        elseif(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Darwin")
             set(NOS "mac")
         else()
-            cmate_die("unsupported ninja for ${CMAKE_SYSTEM_NAME}")
+            cmate_die("Please install ninja: ${CMAKE_SYSTEM_NAME}")
         endif()
 
-        cmate_github_get_latest("ninja-build/ninja" NZIP "ninja-${NOS}.zip$")
+        if(NOT EXISTS "${CMATE_ENV_BIN_DIR}/${NCMD}")
+            cmate_github_get_latest(
+                "ninja-build/ninja"
+                NZIP
+                "ninja-${NOS}.zip$"
+            )
+
+            file(REMOVE_RECURSE ${TDIR})
+            file(ARCHIVE_EXTRACT INPUT ${NZIP} DESTINATION ${TDIR})
+            file(COPY_FILE "${TDIR}/${NCMD}" "${CMATE_ENV_BIN_DIR}/${NCMD}")
+            file(REMOVE_RECURSE ${TDIR})
+        endif()
+
+        set(NINJA "${CMATE_ENV_BIN_DIR}/${NCMD}")
     endif()
+
+    cmate_setg(CMATE_NINJA ${NINJA})
 endfunction()

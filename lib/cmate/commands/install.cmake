@@ -25,7 +25,7 @@ function(cmate_install_cmake_dep)
             list(APPEND ARGS "-DCMAKE_CXX_COMPILER_LAUNCHER=${CMATE_CCACHE}")
         endif()
 
-        find_program(CMATE_NINJA ninja)
+        cmate_set_ninja()
 
         cmate_run_prog(
             CMD
@@ -33,6 +33,7 @@ function(cmate_install_cmake_dep)
                 -DCMAKE_PREFIX_PATH=${CMATE_ENV_DIR}
                 -DCMAKE_INSTALL_PREFIX=${CMATE_ENV_DIR}
                 -DCMAKE_BUILD_TYPE=Release
+                -G Ninja
                 ${ARGS}
                 -S ${CMATE_DEP_SOURCE_DIR} -B ${CMATE_DEP_BUILD_DIR}
                 ${ARGV}
