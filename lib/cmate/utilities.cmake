@@ -174,11 +174,6 @@ function(cmate_download URL FILE)
 endfunction()
 
 function(cmate_set_build_types DEBUGVAR RELEASEVAR DEFAULTS)
-    if(CMATE_BUILD_TYPES)
-        # Already configured
-        return()
-    endif()
-
     set(TYPES "")
 
     if(NOT "${${DEBUGVAR}}" AND NOT "${${RELEASEVAR}}")

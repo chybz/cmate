@@ -416,6 +416,7 @@ endfunction()
 function(cmate_configure)
     file(MAKE_DIRECTORY "${CMATE_BUILD_DIR}/.cmate")
     set(CONFIGURED "${CMATE_BUILD_DIR}/.cmate/.configured")
+    cmate_setg(CMATE_BUILD_TYPES "Debug;Release")
 
     if(EXISTS ${CONFIGURED})
         return()

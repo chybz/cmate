@@ -13,13 +13,13 @@ Options:
 )
 
 function(cmate_build)
+    cmate_configure()
+
     cmate_set_build_types(
         CMATE_BUILD_DEBUG
         CMATE_BUILD_RELEASE
         "Debug"
     )
-
-    cmate_configure()
 
     foreach(TYPE ${CMATE_BUILD_TYPES})
         set(ARGS "")
