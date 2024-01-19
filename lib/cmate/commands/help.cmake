@@ -18,6 +18,7 @@ Options:
   --verbose    Verbose operation
   --cc=ID      Compiler suite to use (overrides CMATE_CC)
                (e.g.: gcc, clang, gcc-10, clang-16, cl)
+  --no-ninja   Don't use Ninja
 
 Commands:
 "

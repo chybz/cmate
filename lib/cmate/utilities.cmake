@@ -235,6 +235,11 @@ function(cmate_github_get_latest REPO VAR RE)
 endfunction()
 
 function(cmate_check_ninja)
+    if(CMATE_NO_NINJA)
+        unset(CMATE_NINJA)
+        return()
+    endif()
+
     find_program(NINJA ninja)
     set(TDIR "${CMATE_TMP_DIR}/ninja")
 
