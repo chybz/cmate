@@ -16,7 +16,7 @@ function(cmate_build)
     cmate_set_build_types(
         CMATE_BUILD_DEBUG
         CMATE_BUILD_RELEASE
-        "Debug;Release"
+        "Debug"
     )
 
     cmate_configure()

@@ -19,11 +19,7 @@ Usage: cmate configure [OPTIONS]
 ${CMATE_CONFIGURE_SHORT_HELP}
 
 Options:
-  --debug                Configure for debug (default: debug, release)
-  --release              Configure for release (default: debug, release)
   --toolchain=FILE       CMake toolchain file
-  --dry-run              Don't touch anything
-  --dump                 Dump generated CMakeLists.txt
   --namespace=NS         CMake package namespace
   --version=SEMVER       CMake package version
   --version-file=FILE    CMake package version from FILE
@@ -418,11 +414,12 @@ function(cmate_configure_run_cmake TYPE)
 endfunction()
 
 function(cmate_configure)
-    cmate_set_build_types(
-        CMATE_CONFIGURE_DEBUG
-        CMATE_CONFIGURE_RELEASE
-        "Debug;Release"
-    )
+    file(MAKE_DIRECTORY "${CMATE_BUILD_DIR}/.cmate")
+    set(CONFIGURED "${CMATE_BUILD_DIR}/.cmate/.configured")
+
+    if(EXISTS ${CONFIGURED})
+        return()
+    endif()
 
     cmate_check_ninja()
 
@@ -433,4 +430,6 @@ function(cmate_configure)
             cmate_configure_run_cmake(${TYPE})
         endforeach()
     endif()
+
+    file(TOUCH ${CONFIGURED})
 endfunction()
