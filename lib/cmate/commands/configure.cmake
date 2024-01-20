@@ -322,6 +322,59 @@ install(
     file(WRITE ${CM_FILE} ${CONTENT})
 endfunction()
 
+function(cmate_configure_save_targets)
+    set(JSON "{}")
+
+    foreach(LST "LIBS" "BINS" "TESTS")
+        string(TOLOWER "${LST}" KEY)
+        cmate_json_set_array(JSON ${JSON} ${KEY} "${CMATE_${LST}}")
+        #"${CMATE_BUILD_DIR}"
+    endforeach()
+
+    cmate_msg("JSON=${JSON}")
+endfunction()
+
+function(cmate_configure_find_targets)
+    file(GLOB LIB_INC_DIRS "${CMATE_ROOT_DIR}/include/*")
+    set(TARGETS "")
+    set(LIBS "")
+    set(BINS "")
+    set(TESTS "")
+    set(SUBDIRS "")
+
+    # Libraries
+    foreach(LIB_INC_DIR ${LIB_INC_DIRS})
+        string(REPLACE "${CMATE_ROOT_DIR}/include/" "" NAME ${LIB_INC_DIR})
+        cmate_target_name(${NAME} "lib" "TNAME")
+        list(APPEND TARGETS ${TNAME})
+        list(APPEND LIBS ${NAME})
+        list(APPEND SUBDIRS "src/lib/${NAME}")
+    endforeach()
+
+    # Binaries and tests
+    foreach(TYPE bin test)
+        file(GLOB SRC_DIRS "${CMATE_ROOT_DIR}/src/${TYPE}/*")
+        set(TVAR "${TYPE}s")
+        string(TOUPPER ${TVAR} TVAR)
+
+        foreach(SRC_DIR ${SRC_DIRS})
+            string(REPLACE "${CMATE_ROOT_DIR}/src/${TYPE}/" "" NAME ${SRC_DIR})
+            cmate_target_name(${NAME} ${TYPE} "TNAME")
+            list(APPEND TARGETS ${TNAME})
+            list(APPEND ${TVAR} ${NAME})
+            list(APPEND SUBDIRS "src/${TYPE}/${NAME}")
+        endforeach()
+    endforeach()
+
+    foreach(LST "TARGETS" "LIBS" "BINS" "TESTS" "SUBDIRS")
+        list(SORT ${LST})
+        set(LVAR "CMATE_${LST}")
+        cmate_setg(${LVAR} "${${LST}}")
+
+        cmate_msg("LIST ${LVAR}: ${${LST}}")
+    endforeach()
+endfunction()
+
 function(cmate_configure_generate)
     # Find libraries (libraries have headers)
     file(GLOB LIB_INC_DIRS "${CMATE_ROOT_DIR}/include/*")
@@ -414,6 +467,10 @@ function(cmate_configure_run_cmake TYPE)
 endfunction()
 
 function(cmate_configure)
+    cmate_configure_find_targets()
+    cmate_configure_save_targets()
+    return()
+
     file(MAKE_DIRECTORY "${CMATE_BUILD_DIR}/.cmate")
     set(CONFIGURED "${CMATE_BUILD_DIR}/.cmate/.configured")
     cmate_setg(CMATE_BUILD_TYPES "Debug;Release")

@@ -92,6 +92,19 @@ function(cmate_json_get_array JSON KEY VAR)
     set(${VAR} ${ITEMS} PARENT_SCOPE)
 endfunction()
 
+function(cmate_json_set_array JVAR JSON KEY VAR)
+    set(ARRAY "[]")
+    set(I 0)
+
+    foreach(ITEM ${VAR})
+        string(JSON ARRAY SET "${ARRAY}" "${I}" "\"${ITEM}\"")
+        math(EXPR I "${I}+1")
+    endforeach()
+
+    string(JSON JSON SET ${JSON} ${KEY} ${ARRAY})
+    set(${JVAR} ${JSON} PARENT_SCOPE)
+endfunction()
+
 function(cmate_load_conf FILE)
     set(PKGS "")
 
