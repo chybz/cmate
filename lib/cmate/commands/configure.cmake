@@ -231,7 +231,7 @@ function(cmate_configure_project_packages VAR)
     set(${VAR} ${CONTENT} PARENT_SCOPE)
 endfunction()
 
-function(cmate_configure_project TARGETS SUBDIRS)
+function(cmate_configure_project)
     if(${CMATE_DRY_RUN})
         return()
     endif()
@@ -265,11 +265,15 @@ endif()
     endif()
 
     # Target subdirs
-    if(SUBDIRS)
+    if(CMATE_TARGETS)
         string(APPEND CONTENT "\n")
 
-        foreach(SUBDIR ${SUBDIRS})
-            string(APPEND CONTENT "add_subdirectory(${SUBDIR})\n")
+        foreach(TYPE "LIB" "BIN" "TEST")
+            foreach(T ${CMATE_${TYPE}S})
+                set(TDIR "src/${TYPE}/${T}")
+                string(TOLOWER "${TDIR}" TDIR)
+                string(APPEND CONTENT "add_subdirectory(${TDIR})\n")
+            endforeach()
         endforeach()
     endif()
 
@@ -281,7 +285,7 @@ install(
     TARGETS"
     )
 
-    foreach(TARGET ${TARGETS})
+    foreach(TARGET ${CMATE_TARGETS})
         string(APPEND CONTENT "\n        ${TARGET}")
     endforeach()
 
@@ -322,16 +326,38 @@ install(
     file(WRITE ${CM_FILE} ${CONTENT})
 endfunction()
 
+function(cmate_configure_load_targets PREFIX)
+    set(JSON "{}")
+    set(TARGETS "")
+
+    if(EXISTS ${CMATE_TARGETS_FILE})
+        file(READ ${CMATE_TARGETS_FILE} JSON)
+    endif()
+
+    foreach(TYPE "LIB" "BIN" "TEST")
+        string(TOLOWER "${TYPE}S" KEY)
+        cmate_json_get_array(${JSON} ${KEY} LST)
+
+        foreach(T ${LST})
+            cmate_target_name(${T} ${TYPE} "TNAME")
+            list(APPEND TARGETS "${TNAME}")
+        endforeach()
+
+        set("${PREFIX}_${TYPE}S" "${LST}" PARENT_SCOPE)
+    endforeach()
+
+    set("${PREFIX}_TARGETS" "${TARGETS}" PARENT_SCOPE)
+endfunction()
+
 function(cmate_configure_save_targets)
     set(JSON "{}")
 
     foreach(LST "LIBS" "BINS" "TESTS")
         string(TOLOWER "${LST}" KEY)
         cmate_json_set_array(JSON ${JSON} ${KEY} "${CMATE_${LST}}")
-        #"${CMATE_BUILD_DIR}"
     endforeach()
 
-    cmate_msg("JSON=${JSON}")
+    file(WRITE "${CMATE_TARGETS_FILE}" ${JSON})
 endfunction()
 
 function(cmate_configure_find_targets)
@@ -340,7 +366,6 @@ function(cmate_configure_find_targets)
     set(LIBS "")
     set(BINS "")
     set(TESTS "")
-    set(SUBDIRS "")
 
     # Libraries
     foreach(LIB_INC_DIR ${LIB_INC_DIRS})
@@ -348,7 +373,6 @@ function(cmate_configure_find_targets)
         cmate_target_name(${NAME} "lib" "TNAME")
         list(APPEND TARGETS ${TNAME})
         list(APPEND LIBS ${NAME})
-        list(APPEND SUBDIRS "src/lib/${NAME}")
     endforeach()
 
     # Binaries and tests
@@ -362,59 +386,61 @@ function(cmate_configure_find_targets)
             cmate_target_name(${NAME} ${TYPE} "TNAME")
             list(APPEND TARGETS ${TNAME})
             list(APPEND ${TVAR} ${NAME})
-            list(APPEND SUBDIRS "src/${TYPE}/${NAME}")
         endforeach()
     endforeach()
 
-    foreach(LST "TARGETS" "LIBS" "BINS" "TESTS" "SUBDIRS")
+    foreach(LST "TARGETS" "LIBS" "BINS" "TESTS")
         list(SORT ${LST})
         set(LVAR "CMATE_${LST}")
         cmate_setg(${LVAR} "${${LST}}")
-
-        cmate_msg("LIST ${LVAR}: ${${LST}}")
     endforeach()
 endfunction()
 
-function(cmate_configure_generate)
-    # Find libraries (libraries have headers)
-    file(GLOB LIB_INC_DIRS "${CMATE_ROOT_DIR}/include/*")
-    set(TARGETS "")
-    set(LIBS "")
-    set(SUBDIRS "")
+function(cmate_configure_needed VAR LIBS BINS TESTS)
+    set(RES FALSE)
 
-    foreach(LIB_INC_DIR ${LIB_INC_DIRS})
-        string(REPLACE "${CMATE_ROOT_DIR}/include/" "" NAME ${LIB_INC_DIR})
-        cmate_target_name(${NAME} "lib" "TNAME")
-        cmate_configure_lib(${NAME} ${TNAME} "include" "src/lib")
-        list(APPEND TARGETS ${TNAME})
-        list(APPEND LIBS ${NAME})
-        list(APPEND SUBDIRS "src/lib/${NAME}")
+    foreach(LST "LIBS" "BINS" "TESTS")
+        set(REFL ${CMATE_${LST}})
+        list(SORT REFL)
+        list(JOIN REFL "_" REFS)
+        set(L ${${LST}})
+        list(SORT L)
+        list(JOIN L "_" S)
+
+        if(NOT "${S}" STREQUAL "${REFS}")
+            set(RES TRUE)
+            break()
+        endif()
     endforeach()
 
-    cmate_setg(CMATE_LIBS "${LIBS}")
+    set(${VAR} ${RES} PARENT_SCOPE)
+endfunction()
+
+function(cmate_configure_generate)
+    foreach(NAME "${CMATE_LIBS}")
+        cmate_target_name(${NAME} "lib" "TNAME")
+        cmate_configure_lib(${NAME} ${TNAME} "include" "src/lib")
+    endforeach()
 
     # Binaries and tests
-    foreach(TYPE bin test)
-        file(GLOB SRC_DIRS "${CMATE_ROOT_DIR}/src/${TYPE}/*")
+    foreach(TYPE "bin" "test")
+        string(TOUPPER "CMATE_${TYPE}S" LNAME)
 
-        foreach(SRC_DIR ${SRC_DIRS})
-            string(REPLACE "${CMATE_ROOT_DIR}/src/${TYPE}/" "" NAME ${SRC_DIR})
+        if(NOT "${${LNAME}}")
+            continue()
+        endif()
+
+        foreach(NAME "${${LNAME}}")
             cmate_target_name(${NAME} ${TYPE} "TNAME")
             cmake_language(
                 CALL "cmate_configure_${TYPE}"
                 ${NAME} ${TNAME} "src/${TYPE}"
             )
-
-            if(NOT "${TYPE}" STREQUAL "test")
-                list(APPEND TARGETS ${TNAME})
-            endif()
-
-            list(APPEND SUBDIRS "src/${TYPE}/${NAME}")
         endforeach()
     endforeach()
 
     # Top-level project
-    cmate_configure_project("${TARGETS}" "${SUBDIRS}")
+    cmate_configure_project()
 endfunction()
 
 function(cmate_configure_cmake_common_args VAR)
@@ -468,16 +494,19 @@ endfunction()
 
 function(cmate_configure)
     cmate_configure_find_targets()
-    cmate_configure_save_targets()
-    return()
+    cmate_configure_load_targets(PREV)
+    cmate_configure_needed(
+        NEEDED
+        "${PREV_LIBS}" "${PREV_BINS}" "${PREV_TESTS}"
+    )
 
-    file(MAKE_DIRECTORY "${CMATE_BUILD_DIR}/.cmate")
-    set(CONFIGURED "${CMATE_BUILD_DIR}/.cmate/.configured")
-    cmate_setg(CMATE_BUILD_TYPES "Debug;Release")
-
-    if(EXISTS ${CONFIGURED})
+    if(NOT NEEDED)
         return()
     endif()
+
+    cmate_configure_generate()
+
+    cmate_setg(CMATE_BUILD_TYPES "Debug;Release")
 
     cmate_check_ninja()
 
@@ -489,5 +518,5 @@ function(cmate_configure)
         endforeach()
     endif()
 
-    file(TOUCH ${CONFIGURED})
+    cmate_configure_save_targets()
 endfunction()

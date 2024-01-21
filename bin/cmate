@@ -3,7 +3,6 @@
 
 set(CMATE "cmate")
 set(CMATE_VER "X.Y.Z")
-set(CMATE_TARGETS "")
 set(CMATE_CMDS "")
 set(CMATE_DEPSFILE "deps.txt")
 set(CMATE_PRJFILE "project.json")
@@ -63,6 +62,8 @@ function(cmate_set_defaults)
     cmate_setg(CMATE_TOOLCHAINS_DIR "${CMATE_HOME_DIR}/toolchains")
 
     cmate_setg(CMATE_BUILD_DIR "${CMATE_ROOT_DIR}/build")
+    cmate_setg(CMATE_TARGETS_FILE "${CMATE_BUILD_DIR}/cmate-targets.json")
+
     cmate_setg(CMATE_STAGE_DIR "${CMATE_ROOT_DIR}/stage")
 
     cmate_setg(CMATE_TMP_DIR "${CMATE_HOME_DIR}/tmp")
