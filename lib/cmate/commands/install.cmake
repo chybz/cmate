@@ -33,6 +33,7 @@ function(cmate_install_cmake_dep)
                 -DCMAKE_PREFIX_PATH=${CMATE_ENV_DIR}
                 -DCMAKE_INSTALL_PREFIX=${CMATE_ENV_DIR}
                 -DCMAKE_BUILD_TYPE=Release
+                -DBUILD_TESTING=OFF
                 -G Ninja
                 ${ARGS}
                 -S ${CMATE_DEP_SOURCE_DIR} -B ${CMATE_DEP_BUILD_DIR}

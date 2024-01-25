@@ -12,10 +12,13 @@ Options:
 )
 
 function(cmate_clean)
+    cmate_configure_find_targets()
+
     set(DIRS "BUILD" "STAGE" "STATE")
 
     if(${CMATE_CLEAN_PURGE})
         list(APPEND DIRS "ENV" "DEPS")
+        cmate_configure_clean()
     endif()
 
     foreach(DIR ${DIRS})

@@ -105,24 +105,44 @@ function(cmate_json_set_array JVAR JSON KEY VAR)
     set(${JVAR} ${JSON} PARENT_SCOPE)
 endfunction()
 
+function(cmate_json_get_str JSON KEY VAR DEF)
+    string(JSON STR ERROR_VARIABLE ERR GET ${JSON} ${KEY})
+
+    if(ERR)
+        set(STR ${DEF})
+    endif()
+
+    set(${VAR} ${STR} PARENT_SCOPE)
+endfunction()
+
 function(cmate_load_conf FILE)
     set(PKGS "")
+    set(JSON "{}")
 
     if(EXISTS ${FILE})
         file(READ ${FILE} JSON)
-
-        string(JSON PROJECT GET ${JSON} "name")
-        cmate_setg(CMATE_PROJECT_NAME ${PROJECT})
-        string(JSON VERSION GET ${JSON} "version")
-        cmate_setg(CMATE_PROJECT_VERSION "${VERSION}")
-        cmate_set_version()
-        string(JSON NAMESPACE GET ${JSON} "namespace")
-        cmate_setg(CMATE_PROJECT_NAMESPACE ${NAMESPACE})
-
-        string(JSON PKGS GET ${JSON} "packages")
     endif()
 
-    cmate_setg(CMATE_PACKAGES "${PKGS}")
+    foreach(VNAME "name" "version" "namespace")
+        set(VAR "CMATE_PROJECT_${VNAME}")
+        string(TOUPPER ${VAR} VAR)
+
+        cmate_json_get_str(${JSON} ${VNAME} ${VAR} "")
+
+        if("${${VAR}}" STREQUAL "")
+            cmate_die("project variable \"${VNAME}\" no set")
+        else()
+            cmate_setg(${VAR} ${${VAR}})
+        endif()
+    endforeach()
+
+    cmate_set_version()
+endfunction()
+
+function(cmate_project_varname NAME VAR)
+    string(TOUPPER "${CMATE_PROJECT_NAME}_${NAME}" VNAME)
+    string(REPLACE "-" "_" VNAME ${VNAME})
+    set(${VAR} ${VNAME} PARENT_SCOPE)
 endfunction()
 
 function(cmate_join_escape_list LVAR OVAR)

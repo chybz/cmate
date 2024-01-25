@@ -2,8 +2,8 @@ list(APPEND CMATE_CMDS "configure")
 list(
     APPEND
     CMATE_CONFIGURE_OPTIONS
-    "dry-run"
-    "dump"
+    "no-tests"
+    "toolchain"
     "namespace"
     "version"
     "version-file"
@@ -19,8 +19,8 @@ Usage: cmate configure [OPTIONS]
 ${CMATE_CONFIGURE_SHORT_HELP}
 
 Options:
+  --no-tests             Don't build tests
   --toolchain=FILE       CMake toolchain file
-  --namespace=NS         CMake package namespace
   --version=SEMVER       CMake package version
   --version-file=FILE    CMake package version from FILE
   --version-file=FILE    CMake package version from FILE
@@ -238,6 +238,8 @@ function(cmate_configure_project)
 
     set(CM_FILE "${CMATE_ROOT_DIR}/CMakeLists.txt")
 
+    cmate_project_varname("BUILD_TESTS" BUILD_TESTS)
+
     string(
         APPEND
         CONTENT
@@ -258,23 +260,52 @@ endif()
 "
     )
 
+    # Options
+    string(APPEND CONTENT "\n")
+    string(
+        APPEND
+        CONTENT
+        "option(${BUILD_TESTS} \"Build the unit tests.\" OFF)\n"
+    )
+
     cmate_configure_project_packages(PKGS)
 
     if(PKGS)
         string(APPEND CONTENT "${PKGS}")
     endif()
 
+    set(ITARGETS "")
+
     # Target subdirs
-    if(CMATE_TARGETS)
+    if(CMATE_BINS OR CMATE_LIBS)
         string(APPEND CONTENT "\n")
 
-        foreach(TYPE "LIB" "BIN" "TEST")
+        foreach(TYPE "LIB" "BIN")
             foreach(T ${CMATE_${TYPE}S})
+                cmate_target_name(${T} ${TYPE} TNAME)
+                list(APPEND ITARGETS ${TNAME})
+
                 set(TDIR "src/${TYPE}/${T}")
                 string(TOLOWER "${TDIR}" TDIR)
                 string(APPEND CONTENT "add_subdirectory(${TDIR})\n")
             endforeach()
         endforeach()
+    else()
+        cmate_die("no targets to configure")
+    endif()
+
+    if(CMATE_TESTS)
+        string(APPEND CONTENT "if(${BUILD_TESTS})\n")
+        string(APPEND CONTENT "    include(CTest)\n")
+        string(APPEND CONTENT "    enable_testing()\n")
+
+        foreach(T ${CMATE_TESTS})
+            set(TDIR "src/tests/${T}")
+            string(TOLOWER "${TDIR}" TDIR)
+            string(APPEND CONTENT "    add_subdirectory(${TDIR})\n")
+        endforeach()
+
+        string(APPEND CONTENT "endif()\n")
     endif()
 
     string(
@@ -285,7 +316,7 @@ install(
     TARGETS"
     )
 
-    foreach(TARGET ${CMATE_TARGETS})
+    foreach(TARGET ${ITARGETS})
         string(APPEND CONTENT "\n        ${TARGET}")
     endforeach()
 
@@ -396,6 +427,22 @@ function(cmate_configure_find_targets)
     endforeach()
 endfunction()
 
+function(cmate_configure_clean)
+    foreach(TYPE "BIN" "LIB" "TEST")
+        if(NOT CMATE_${TYPE}S)
+            continue()
+        endif()
+
+        foreach(T ${CMATE_${TYPE}S})
+            set(TDIR "${CMATE_ROOT_DIR}/src/${TYPE}/${T}")
+            string(TOLOWER "${TDIR}" TDIR)
+            file(REMOVE "${TDIR}/CMakeLists.txt")
+        endforeach()
+    endforeach()
+
+    file(REMOVE "${CMATE_ROOT_DIR}/CMakeLists.txt")
+endfunction()
+
 function(cmate_configure_needed VAR LIBS BINS TESTS)
     set(RES FALSE)
 
@@ -417,7 +464,7 @@ function(cmate_configure_needed VAR LIBS BINS TESTS)
 endfunction()
 
 function(cmate_configure_generate)
-    foreach(NAME "${CMATE_LIBS}")
+    foreach(NAME ${CMATE_LIBS})
         cmate_target_name(${NAME} "lib" "TNAME")
         cmate_configure_lib(${NAME} ${TNAME} "include" "src/lib")
     endforeach()
@@ -426,11 +473,11 @@ function(cmate_configure_generate)
     foreach(TYPE "bin" "test")
         string(TOUPPER "CMATE_${TYPE}S" LNAME)
 
-        if(NOT "${${LNAME}}")
+        if(NOT ${LNAME})
             continue()
         endif()
 
-        foreach(NAME "${${LNAME}}")
+        foreach(NAME ${${LNAME}})
             cmate_target_name(${NAME} ${TYPE} "TNAME")
             cmake_language(
                 CALL "cmate_configure_${TYPE}"
@@ -457,6 +504,15 @@ function(cmate_configure_cmake_common_args VAR)
     if(CMATE_CCACHE)
         list(APPEND ARGS "-DCMAKE_C_COMPILER_LAUNCHER=${CMATE_CCACHE}")
         list(APPEND ARGS "-DCMAKE_CXX_COMPILER_LAUNCHER=${CMATE_CCACHE}")
+    endif()
+
+    cmate_project_varname("BUILD_TESTS" BUILD_TESTS)
+
+    if(CMATE_CONFIGURE_NO_TESTS)
+        list(APPEND ARGS "-D${BUILD_TESTS}=OFF")
+        list(APPEND ARGS "-DBUILD_TESTING=OFF")
+    else()
+        list(APPEND ARGS "-D${BUILD_TESTS}=ON")
     endif()
 
     set(${VAR} ${ARGS} PARENT_SCOPE)
