@@ -18,6 +18,10 @@ function(cmate_info MSG)
 endfunction()
 
 function(cmate_setg VAR VAL)
+    if("$ENV{CMATE_SET_TRACE}")
+        message("SET: ${VAR}=\"${VAL}\"")
+    endif()
+
     set(${VAR} "${VAL}" CACHE INTERNAL "${VAR}")
 endfunction()
 
@@ -153,6 +157,20 @@ endfunction()
 macro(cmate_unescape_list LVAR)
     list(TRANSFORM ${LVAR} REPLACE "_semicolon_" "\\\;")
 endmacro()
+
+function(cmate_unquote STR VAR)
+    set(VAL "")
+
+    if(STR MATCHES "^\"((\\\\.|[^\"])*)?\"$")
+        set(VAL "${CMAKE_MATCH_1}")
+    elseif(STR MATCHES "^'([^']*(''[^']*)*)?'$")
+        set(VAL "${CMAKE_MATCH_1}")
+    else()
+        set(VAL "${STR}")
+    endif()
+
+    set(${VAR} ${VAL} PARENT_SCOPE)
+endfunction()
 
 function(cmate_run_prog)
     cmake_parse_arguments(RUN "" "DIR" "CMD" ${ARGN})

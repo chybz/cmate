@@ -21,6 +21,7 @@ if(CMAKE_SCRIPT_MODE_FILE AND NOT CMAKE_PARENT_LIST_FILE)
     list(PREPEND CMAKE_MODULE_PATH ${CMATE_LIB_DIR})
 
     include(cmate/utilities)
+    include(cmate/yaml)
     include(cmate/args)
     include(cmate/target_deps)
     include(cmate/deps)
@@ -122,6 +123,9 @@ endfunction()
 # Main part
 #
 ##############################################################################
+cmate_yaml_load(toto.yaml TOTO)
+return()
+
 if(CMAKE_SCRIPT_MODE_FILE)
     cmate_set_defaults()
     cmate_parse_arguments()
