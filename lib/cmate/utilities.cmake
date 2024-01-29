@@ -25,6 +25,14 @@ function(cmate_setg VAR VAL)
     set(${VAR} "${VAL}" CACHE INTERNAL "${VAR}")
 endfunction()
 
+function(cmate_appendg VAR VAL)
+    if(${VAR})
+        set(VAL "${${VAR}};${VAL}")
+    endif()
+
+    cmate_setg(${VAR} "${VAL}")
+endfunction()
+
 function(cmate_setgdir VAR VAL)
     cmate_setg(${VAR} "${VAL}")
     file(MAKE_DIRECTORY ${${VAR}})

@@ -124,6 +124,16 @@ endfunction()
 #
 ##############################################################################
 cmate_yaml_load(toto.yaml TOTO)
+cmate_yaml_keys(TOTO ALLK)
+
+foreach(K ${ALLK})
+    cmate_yaml_type("TOTO.${K}" TYPE)
+    cmate_msg("YAML contains ${K} of type ${TYPE}")
+endforeach()
+
+cmate_yaml_type("TOTO.section.three" TYPE)
+cmate_msg("TOTO.section.three is of type ${TYPE}")
+
 return()
 
 if(CMAKE_SCRIPT_MODE_FILE)
