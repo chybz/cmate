@@ -104,36 +104,38 @@ function(cmate_yaml_load_scalar STR VAR)
     set(${VAR} "${VALUE}" PARENT_SCOPE)
 endfunction()
 
+macro(cmate_check_indent INDENTS LINE)
+    if("${LINE}" MATCHES "^([ ]*)")
+        string(LENGTH "${CMAKE_MATCH_1}" LEN)
+        list(GET INDENTS -1 INDENT)
+
+        if(${LEN} LESS ${INDENT})
+            break()
+        elseif(${LEN} GREATER ${INDENT})
+            cmate_die("bad indenting: (${LEN} > ${INDENT}): '${LINE}'")
+        endif()
+    else()
+        # Should not happen
+        cmate_die("invalid array line: ${LINE}")
+    endif()
+endmacro()
+
 function(cmate_yaml_load_array ROOT INDENTS LINES VAR)
     set(VALUES "")
 
     while(LINES)
         list(GET LINES 0 LINE)
 
-        # Check indent level
-        if(${LINE} MATCHES "^([ ]*)")
-            string(LENGTH "${CMAKE_MATCH_1}" LEN)
-            list(GET INDENTS -1 INDENT)
-
-            if(${LEN} LESS ${INDENT})
-                break()
-            elseif(${LEN} GREATER ${INDENT})
-                cmate_die("bad indenting: ${LINE}")
-            endif()
-        else()
-            # Should not happen
-            cmate_die("invalid array line: ${LINE}")
-        endif()
+        cmate_check_indent("${INDENTS}" "${LINE}")
 
         if(${LINE} MATCHES "^([ ]*-[ ]+)[^\\'\"][^ ]*[ ]*:([ ]+|$)?")
-            cmate_msg("LA 1")
             # Inline nested hash
             string(LENGTH "${CMAKE_MATCH_1}" INDENT2)
             list(APPEND INDENTS ${INDENT2})
 
-            string(REPLACE "-" " " LINE ${LINE})
+            string(REPLACE "-" " " LINE "${LINE}")
             list(POP_FRONT LINES)
-            list(PREPEND LINES ${LINE})
+            list(PREPEND LINES "${LINE}")
 
             cmate_yaml_load_hash(${ROOT} ${INDENTS} ${LINES} LINES)
         elseif(${LINE} MATCHES "^[ ]*-([ ]*)(.+)[ ]*$")
@@ -154,20 +156,7 @@ function(cmate_yaml_load_hash ROOT INDENTS LINES VAR)
     while(LINES)
         list(GET LINES 0 LINE)
 
-        # Check indent level
-        if(${LINE} MATCHES "^([ ]*)")
-            string(LENGTH "${CMAKE_MATCH_1}" LEN)
-            list(GET INDENTS -1 INDENT)
-
-            if(${LEN} LESS ${INDENT})
-                break()
-            elseif(${LEN} GREATER ${INDENT})
-                cmate_die("bad indenting: ${LINE}")
-            endif()
-        else()
-            # Should not happen
-            cmate_die("invalid hash line: ${LINE}")
-        endif()
+        cmate_check_indent("${INDENTS}" "${LINE}")
 
         if(${LINE} MATCHES "^([ ]*(.+):)")
             string(LENGTH "${CMAKE_MATCH_1}" TOSTRIP)
