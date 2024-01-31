@@ -54,11 +54,11 @@ function(cmate_configure_lib NAME TBASE INC_BASE SRC_BASE)
 
     string(APPEND CONTENT "add_library(${TBASE})\n")
 
-    if(CMATE_PROJECT_NAMESPACE)
+    if(CMATE_PROJECT.namespace)
         string(
             APPEND
             CONTENT
-            "add_library(${CMATE_PROJECT_NAMESPACE}::${NAME} ALIAS ${TBASE})\n"
+            "add_library(${CMATE_PROJECT.namespace}::${NAME} ALIAS ${TBASE})\n"
         )
     endif()
 
@@ -84,7 +84,7 @@ target_include_directories(
     ${TBASE}
     PUBLIC
         $<BUILD_INTERFACE:\${${VBASE}_INC_DIR}>
-        $<INSTALL_INTERFACE:\${CMAKE_INSTALL_INCLUDEDIR}/${CMATE_PROJECT_NAMESPACE}>
+        $<INSTALL_INTERFACE:\${CMAKE_INSTALL_INCLUDEDIR}/${CMATE_PROJECT.namespace}>
     PRIVATE
         \${CMAKE_CURRENT_SOURCE_DIR}
 )
@@ -101,10 +101,10 @@ target_include_directories(
 set_target_properties(
     ${TBASE}
     PROPERTIES
-        VERSION ${CMATE_PROJECT_VERSION}
-        SOVERSION ${CMATE_PROJECT_VERSION_MAJOR}.${CMATE_PROJECT_VERSION_MINOR}
+        VERSION ${CMATE_PROJECT.version}
+        SOVERSION ${CMATE_PROJECT.version_major}.${CMATE_PROJECT.version_minor}
         EXPORT_NAME ${NAME}
-        OUTPUT_NAME ${CMATE_PROJECT_NAMESPACE}_${NAME}
+        OUTPUT_NAME ${CMATE_PROJECT.namespace}_${NAME}
 )
 "
     )
@@ -183,49 +183,90 @@ function(cmate_configure_test NAME TBASE SRC_BASE)
     cmate_configure_prog("test" ${NAME} ${TBASE} ${SRC_BASE})
 endfunction()
 
-function(cmate_configure_project_packages VAR)
-    # CMake style packages
-    cmate_load_cmake_package_deps("${CMATE_PACKAGES}" "PRJ")
+function(cmate_configure_cmake_package PKG COMPS VAR)
     set(CONTENT "")
 
-    if(PRJ_CMAKE_PACKAGES)
-        string(APPEND CONTENT "\n")
-    endif()
-
-    foreach(PKG ${PRJ_CMAKE_PACKAGES})
-        if(PRJ_CMAKE_${PKG}_COMPS)
-            string(
-                APPEND
-                CONTENT
+    if(COMPS)
+        string(
+            APPEND
+            CONTENT
             "find_package(
     ${PKG} CONFIG REQUIRED
     COMPONENTS
 "
             )
 
-            foreach(PC ${PRJ_CMAKE_${PKG}_COMPS})
-                string(APPEND CONTENT "        ${PC}\n")
-            endforeach()
+        foreach(C ${COMPS})
+            string(APPEND CONTENT "        ${C}\n")
+        endforeach()
 
-            string(APPEND CONTENT ")\n")
-        else()
-            string(APPEND CONTENT "find_package(${PKG} CONFIG REQUIRED)\n")
-        endif()
-    endforeach()
-
-    # PkgConfig style packages
-    cmate_load_pkgconfig_package_deps("${CMATE_PACKAGES}" "PRJ")
-
-    if(PRJ_PKGCONFIG_PACKAGES)
-        string(APPEND CONTENT "find_package(PkgConfig REQUIRED)\n")
+        string(APPEND CONTENT ")\n")
+    else()
+        string(APPEND CONTENT "find_package(${PKG} CONFIG REQUIRED)\n")
     endif()
 
-    foreach(PKG ${PRJ_PKGCONFIG_PACKAGES})
+    set(${VAR} ${CONTENT} PARENT_SCOPE)
+endfunction()
+
+function(cmate_configure_project_cmake_packages VAR)
+    set(CONTENT "")
+    set(VBASE "CMATE_PROJECT.packages.cmake")
+
+    if(DEFINED ${VBASE})
+        cmate_yaml_check_type(${VBASE} "ARRAY")
+        string(APPEND CONTENT "\n")
+    endif()
+
+    foreach(PKG ${${VBASE}})
+        set(COMPS "")
+        cmate_yaml_is_subkey(${PKG} SUBKEY)
+
+        if(${SUBKEY})
+            cmate_yaml_keys(${VBASE}.${PKG} PKGS)
+
+            foreach(P ${PKGS})
+                set(COMPS ${${VBASE}.${PKG}.${P}})
+                cmate_configure_cmake_package(${P} "${COMPS}" PC)
+            endforeach()
+        else()
+            cmate_configure_cmake_package(${PKG} "${COMPS}" PC)
+        endif()
+
+        string(APPEND CONTENT "${PC}")
+    endforeach()
+
+    set(${VAR} ${CONTENT} PARENT_SCOPE)
+endfunction()
+
+function(cmate_configure_project_pkgconfig_packages VAR)
+    set(CONTENT "")
+    set(VBASE "CMATE_PROJECT.packages.pkgconfig")
+
+    if(DEFINED ${VBASE})
+        cmate_yaml_check_type(${VBASE} "ARRAY")
+        string(APPEND CONTENT "\n")
+    endif()
+
+    foreach(PKG ${${VBASE}})
         string(
             APPEND
             CONTENT
             "pkg_check_modules(${PKG} REQUIRED IMPORTED_TARGET ${PKG})\n"
         )
+    endforeach()
+
+    set(${VAR} ${CONTENT} PARENT_SCOPE)
+endfunction()
+
+function(cmate_configure_project_packages VAR)
+    set(CONTENT "")
+
+    foreach(PTYPE "cmake" "pkgconfig")
+        cmake_language(
+            CALL "cmate_configure_project_${PTYPE}_packages"
+            PKGS
+        )
+        string(APPEND CONTENT "${PKGS}")
     endforeach()
 
     set(${VAR} ${CONTENT} PARENT_SCOPE)
@@ -245,7 +286,7 @@ function(cmate_configure_project)
         CONTENT
         "cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(${CMATE_PROJECT_NAME} VERSION ${CMATE_PROJECT_VERSION} LANGUAGES C CXX)
+project(${CMATE_PROJECT.name} VERSION ${CMATE_PROJECT.version} LANGUAGES C CXX)
 
 include(GNUInstallDirs)
 
@@ -269,10 +310,7 @@ endif()
     )
 
     cmate_configure_project_packages(PKGS)
-
-    if(PKGS)
-        string(APPEND CONTENT "${PKGS}")
-    endif()
+    string(APPEND CONTENT "${PKGS}")
 
     set(ITARGETS "")
 
@@ -324,17 +362,17 @@ install(
         APPEND
         CONTENT
         "
-    EXPORT ${CMATE_PROJECT_NAME}-config
+    EXPORT ${CMATE_PROJECT.name}-config
     RUNTIME DESTINATION \${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION \${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION \${CMAKE_INSTALL_LIBDIR}
 )
 
 install(
-    EXPORT ${CMATE_PROJECT_NAME}-config
-    FILE ${CMATE_PROJECT_NAME}-config.cmake
-    NAMESPACE ${CMATE_PROJECT_NAMESPACE}::
-    DESTINATION \${CMAKE_INSTALL_LIBDIR}/cmake/${CMATE_PROJECT_NAME}
+    EXPORT ${CMATE_PROJECT.name}-config
+    FILE ${CMATE_PROJECT.name}-config.cmake
+    NAMESPACE ${CMATE_PROJECT.namespace}::
+    DESTINATION \${CMAKE_INSTALL_LIBDIR}/cmake/${CMATE_PROJECT.name}
 )
 "
     )
@@ -347,7 +385,7 @@ install(
                 "
 install(
     DIRECTORY \"\${PROJECT_SOURCE_DIR}/include/${LIB}/\"
-    DESTINATION \${CMAKE_INSTALL_INCLUDEDIR}/${CMATE_PROJECT_NAMESPACE}
+    DESTINATION \${CMAKE_INSTALL_INCLUDEDIR}/${CMATE_PROJECT.namespace}
 )
 "
             )

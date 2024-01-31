@@ -5,8 +5,8 @@ set(CMATE "cmate")
 set(CMATE_VER "X.Y.Z")
 set(CMATE_CMDS "")
 set(CMATE_DEPSFILE "deps.txt")
-set(CMATE_PRJFILE "project.json")
-set(CMATE_LINKFILE "link.json")
+set(CMATE_PRJFILE "project.yaml")
+set(CMATE_LINKFILE "link.yaml")
 set(CMATE_GIT_HOST "GH")
 set(CMATE_GH "https://github.com")
 set(CMATE_GL "https://gitlab.com")
@@ -35,13 +35,6 @@ if(CMAKE_SCRIPT_MODE_FILE AND NOT CMAKE_PARENT_LIST_FILE)
     include(cmate/commands/help)
 endif()
 ## END CMATE INCLUDES
-
-##############################################################################
-#
-# Target common functions
-#
-##############################################################################
-
 
 ##############################################################################
 #
@@ -123,19 +116,6 @@ endfunction()
 # Main part
 #
 ##############################################################################
-cmate_yaml_load(toto.yaml TOTO)
-cmate_yaml_keys(TOTO ALLK)
-
-foreach(K ${ALLK})
-    cmate_yaml_type("TOTO.${K}" TYPE)
-    cmate_msg("YAML contains ${K} of type ${TYPE}")
-endforeach()
-
-cmate_yaml_type("TOTO.section.three" TYPE)
-cmate_msg("TOTO.section.three is of type ${TYPE}")
-
-return()
-
 if(CMAKE_SCRIPT_MODE_FILE)
     cmate_set_defaults()
     cmate_parse_arguments()

@@ -81,7 +81,7 @@ function(cmate_target_link_deps NAME FILE VAR)
 endfunction()
 
 function(cmate_target_name NAME TYPE VAR)
-    string(TOLOWER "${CMATE_PROJECT_NAMESPACE}_${NAME}_${TYPE}" TBASE)
+    string(TOLOWER "${CMATE_PROJECT.namespace}_${NAME}_${TYPE}" TBASE)
     string(REPLACE "-" "_" TBASE ${TBASE})
     set(${VAR} ${TBASE} PARENT_SCOPE)
 endfunction()
