@@ -7,9 +7,7 @@ function(cmate_yaml_type PATH VAR)
     set(RES "UNKNOWN")
 
     foreach(TYPE "scalar" "array" "hash")
-        cmake_language(CALL "cmate_yaml_is_${TYPE}" ${PATH} IS)
-
-        if(IS)
+        if("${PATH}.__type__" STREQUAL "${TYPE}")
             string(TOUPPER ${TYPE} RES)
             break()
         endif()
@@ -26,21 +24,6 @@ function(cmate_yaml_check_type PATH TYPE)
     endif()
 endfunction()
 
-function(cmate_yaml_is_scalar PATH VAR)
-    set(RES 0)
-
-    cmate_yaml_is_array(${PATH} IS_ARRAY)
-    cmate_yaml_is_hash(${PATH} IS_HASH)
-
-    if(NOT (${IS_ARRAY} OR ${IS_HASH}))
-        if(DEFINED ${PATH})
-            set(RES 1)
-        endif()
-    endif()
-
-    set(${VAR} ${RES} PARENT_SCOPE)
-endfunction()
-
 function(cmate_yaml_is_subkey STR VAR)
     set(RES 0)
 
@@ -51,31 +34,11 @@ function(cmate_yaml_is_subkey STR VAR)
     set(${VAR} ${RES} PARENT_SCOPE)
 endfunction()
 
-function(cmate_yaml_is_array PATH VAR)
-    set(RES 0)
-
-    if(DEFINED ${PATH}.__array__)
-        set(RES 1)
-    endif()
-
-    set(${VAR} ${RES} PARENT_SCOPE)
-endfunction()
-
-function(cmate_yaml_is_hash PATH VAR)
-    set(RES 0)
-
-    if(DEFINED ${PATH}.__keys__)
-        set(RES 1)
-    endif()
-
-    set(${VAR} ${RES} PARENT_SCOPE)
-endfunction()
-
 function(cmate_yaml_keys PATH VAR)
     set(${VAR} "${${PATH}.__keys__}" PARENT_SCOPE)
 endfunction()
 
-function(cmate_yaml_load FILE ROOT)
+function(cmate_yaml_load FILE VAR)
     set(LINES "")
 
     if(EXISTS ${FILE})
@@ -100,10 +63,10 @@ function(cmate_yaml_load FILE ROOT)
             # A document (ignored)
             list(POP_FRONT LINES)
         elseif(LINE MATCHES "^[ ]*-([ ]|$|-+$)")
-            cmate_yaml_load_array("${ROOT}" "0" "${LINES}" "LINES")
+            cmate_yaml_load_array("0" "${LINES}" LINES JSON)
         elseif(LINE MATCHES "^([ ]*)[^ ]")
             string(LENGTH "${CMAKE_MATCH_1}" LEN)
-            cmate_yaml_load_hash("${ROOT}" "${LEN}" "${LINES}" "LINES")
+            cmate_yaml_load_hash("${LEN}" "${LINES}" LINES JSON)
         endif()
 
         list(LENGTH LINES LINE_COUNT)
@@ -112,13 +75,35 @@ function(cmate_yaml_load FILE ROOT)
             cmate_die("cmate_yaml_load: no lines consumed")
         endif()
     endwhile()
+
+    set(${VAR} "${JSON}" PARENT_SCOPE)
 endfunction()
 
 #
 # Implementation
 #
+macro(cmate_yaml_set JSON KEY VAL)
+    list(APPEND CMATE_YAML__VARS "${VAR}")
+
+    if(${VAR})
+        set(VAL "${${VAR}};${VAL}")
+    endif()
+
+    set(${VAR} "${VAL}")
+endmacro()
+
+macro(cmate_yaml_set_type VAR TYPE)
+    unset(${VAR})
+    cmate_yaml_set("${VAR}.__type__" "${TYPE}")
+endmacro()
+
 function(cmate_yaml_load_scalar STR VAR)
     set(VALUE "")
+    set(IS_KEY 0)
+
+    if(${ARGC} GREATER 2 AND ARGV2 STREQUAL "1")
+        set(IS_KEY 1)
+    endif()
 
     # Trim whitespace and comments
     string(REGEX REPLACE "^[ ]+" "" STR ${STR})
@@ -126,9 +111,13 @@ function(cmate_yaml_load_scalar STR VAR)
     string(REGEX REPLACE "#.*$" "" STR ${STR})
 
     if("${STR}" STREQUAL "~")
-        set(VALUE "")
+        set(VALUE "null")
     else()
         cmate_unquote(${STR} VALUE)
+
+        if(VALUE MATCHES "[^0-9]" AND NOT ${IS_KEY})
+            set(VALUE "\"${VALUE}\"")
+        endif()
     endif()
 
     set(${VAR} "${VALUE}" PARENT_SCOPE)
@@ -150,16 +139,15 @@ macro(cmate_check_indent INDENTS LINE)
     endif()
 endmacro()
 
-function(cmate_yaml_load_array ROOT INDENTS LINES VAR)
-    set(VALUES "")
-    set(SUBH 0)
+function(cmate_yaml_load_array INDENTS LINES LINES_VAR JSON_VAR)
+    set(ARRAY "[]")
 
     while(LINES)
         list(GET LINES 0 LINE)
 
         cmate_check_indent("${INDENTS}" "${LINE}")
 
-        if(${LINE} MATCHES "^([ ]*-[ ]+)[^\\'\"][^ ]*[ ]*:([ ]+|$)?")
+        if(${LINE} MATCHES "^([ ]*-[ ]+)[^\\'\"][^ ]*[ ]*:([ ]+|$)")
             # Inline nested hash
             string(LENGTH "${CMAKE_MATCH_1}" INDENT2)
 
@@ -168,28 +156,30 @@ function(cmate_yaml_load_array ROOT INDENTS LINES VAR)
             list(PREPEND LINES "${LINE}")
 
             cmate_yaml_load_hash(
-                "${ROOT}.__${SUBH}"
                 "${INDENTS};${INDENT2}"
                 "${LINES}"
-                "LINES"
+                LINES
+                OBJ
             )
-            list(APPEND VALUES "__${SUBH}")
-            math(EXPR SUBH "${SUBH}+1")
+
+            string(JSON POS LENGTH "${ARRAY}")
+            string(JSON ARRAY SET ${ARRAY} ${POS} ${OBJ})
         elseif(${LINE} MATCHES "^[ ]*-([ ]*)(.+)[ ]*$")
             # Array entry with value
             list(POP_FRONT LINES)
             cmate_yaml_load_scalar("${CMAKE_MATCH_2}" VALUE)
-            list(APPEND VALUES ${VALUE})
+
+            string(JSON POS LENGTH "${ARRAY}")
+            string(JSON ARRAY SET ${ARRAY} ${POS} ${VALUE})
         endif()
     endwhile()
 
-    set(${VAR} ${LINES} PARENT_SCOPE)
-    cmate_appendg(${ROOT} "${VALUES}")
-    cmate_setg(${ROOT}.__array__ 1)
+    set(${LINES_VAR} ${LINES} PARENT_SCOPE)
+    set(${JSON_VAR} ${ARRAY} PARENT_SCOPE)
 endfunction()
 
-function(cmate_yaml_load_hash ROOT INDENTS LINES VAR)
-    set(KEYS "")
+function(cmate_yaml_load_hash INDENTS LINES LINES_VAR JSON_VAR)
+    set(HASH "{}")
 
     while(LINES)
         list(GET LINES 0 LINE)
@@ -198,24 +188,21 @@ function(cmate_yaml_load_hash ROOT INDENTS LINES VAR)
 
         if(${LINE} MATCHES "^([ ]*(.+):)")
             string(LENGTH "${CMAKE_MATCH_1}" TOSTRIP)
-            cmate_yaml_load_scalar("${CMAKE_MATCH_2}" KEY)
-            list(APPEND KEYS ${KEY})
+            cmate_yaml_load_scalar("${CMAKE_MATCH_2}" KEY 1)
             string(SUBSTRING ${LINE} ${TOSTRIP} -1 LINE)
         endif()
-
-        set(SUBROOT "${ROOT}.${KEY}")
 
         if(NOT "${LINE}" STREQUAL "")
             # We have a value
             cmate_yaml_load_scalar("${LINE}" VALUE)
-            cmate_setg("${ROOT}.${KEY}" "${VALUE}")
+            string(JSON HASH SET ${HASH} ${KEY} ${VALUE})
             list(POP_FRONT LINES)
         else()
             # Indent/sub hash
             list(POP_FRONT LINES)
 
             if(NOT LINES)
-                cmate_setg("${ROOT}.${KEY}" "")
+                string(JSON HASH SET ${HASH} ${KEY} "null")
                 break()
             endif()
 
@@ -224,24 +211,25 @@ function(cmate_yaml_load_hash ROOT INDENTS LINES VAR)
             if(${LINE} MATCHES "^([ ]*)-")
                 string(LENGTH "${CMAKE_MATCH_1}" LEN)
                 cmate_yaml_load_array(
-                    "${SUBROOT}"
                     "${INDENTS};${LEN}"
                     "${LINES}"
-                    "LINES"
+                    LINES
+                    OBJ
                 )
+                string(JSON HASH SET ${HASH} ${KEY} ${OBJ})
             elseif(${LINE} MATCHES "^([ ]*).")
                 string(LENGTH "${CMAKE_MATCH_1}" LEN)
                 cmate_yaml_load_hash(
-                    "${SUBROOT}"
                     "${INDENTS};${LEN}"
                     "${LINES}"
-                    "LINES"
+                    LINES
+                    OBJ
                 )
+                string(JSON HASH SET ${HASH} ${KEY} ${OBJ})
             endif()
         endif()
     endwhile()
 
-    set(${VAR} ${LINES} PARENT_SCOPE)
-    cmate_appendg("${ROOT}.__keys__" "${KEYS}")
+    set(${LINES_VAR} ${LINES} PARENT_SCOPE)
+    set(${JSON_VAR} ${HASH} PARENT_SCOPE)
 endfunction()
-

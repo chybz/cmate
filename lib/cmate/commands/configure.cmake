@@ -101,6 +101,7 @@ target_include_directories(
 set_target_properties(
     ${TBASE}
     PROPERTIES
+        CXX_STANDARD ${CMATE_PROJECT.std}
         VERSION ${CMATE_PROJECT.version}
         SOVERSION ${CMATE_PROJECT.version_major}.${CMATE_PROJECT.version_minor}
         EXPORT_NAME ${NAME}
@@ -163,6 +164,7 @@ target_include_directories(
 set_target_properties(
     ${TBASE}
     PROPERTIES
+        CXX_STANDARD ${CMATE_PROJECT.std}
         OUTPUT_NAME ${NAME}
 )
 "
@@ -183,8 +185,26 @@ function(cmate_configure_test NAME TBASE SRC_BASE)
     cmate_configure_prog("test" ${NAME} ${TBASE} ${SRC_BASE})
 endfunction()
 
-function(cmate_configure_cmake_package PKG COMPS VAR)
+function(cmate_configure_cmake_set_pkg PKGDESC PKGVAR COMPSVAR)
+    set(PKG "")
+    set(COMPS "")
+
+    string(JSON T ERROR_VARIABLE ERR TYPE ${PKGDESC})
+
+    if(T STREQUAL "OBJECT")
+        string(JSON PKG MEMBER ${PKGDESC} 0)
+        cmate_json_get_array(${PKGDESC} ${PKG} COMPS)
+    else()
+        set(PKG "${PKGDESC}")
+    endif()
+
+    set(${PKGVAR} ${PKG} PARENT_SCOPE)
+    set(${COMPSVAR} ${COMPS} PARENT_SCOPE)
+endfunction()
+
+function(cmate_configure_cmake_package PKGDESC VAR)
     set(CONTENT "")
+    cmate_configure_cmake_set_pkg(${PKGDESC} PKG COMPS)
 
     if(COMPS)
         string(
@@ -210,28 +230,14 @@ endfunction()
 
 function(cmate_configure_project_cmake_packages VAR)
     set(CONTENT "")
-    set(VBASE "CMATE_PROJECT.packages.cmake")
+    cmate_conf_get("packages.cmake" PKGS)
 
-    if(DEFINED ${VBASE})
-        cmate_yaml_check_type(${VBASE} "ARRAY")
+    if(PKGS)
         string(APPEND CONTENT "\n")
     endif()
 
-    foreach(PKG ${${VBASE}})
-        set(COMPS "")
-        cmate_yaml_is_subkey(${PKG} SUBKEY)
-
-        if(${SUBKEY})
-            cmate_yaml_keys(${VBASE}.${PKG} PKGS)
-
-            foreach(P ${PKGS})
-                set(COMPS ${${VBASE}.${PKG}.${P}})
-                cmate_configure_cmake_package(${P} "${COMPS}" PC)
-            endforeach()
-        else()
-            cmate_configure_cmake_package(${PKG} "${COMPS}" PC)
-        endif()
-
+    foreach(PKG ${PKGS})
+        cmate_configure_cmake_package(${PKG} PC)
         string(APPEND CONTENT "${PC}")
     endforeach()
 
@@ -240,14 +246,13 @@ endfunction()
 
 function(cmate_configure_project_pkgconfig_packages VAR)
     set(CONTENT "")
-    set(VBASE "CMATE_PROJECT.packages.pkgconfig")
+    cmate_conf_get("packages.pkgconfig" PKGS)
 
-    if(DEFINED ${VBASE})
-        cmate_yaml_check_type(${VBASE} "ARRAY")
+    if(PKGS)
         string(APPEND CONTENT "\n")
     endif()
 
-    foreach(PKG ${${VBASE}})
+    foreach(PKG ${PKGS})
         string(
             APPEND
             CONTENT
@@ -289,11 +294,6 @@ function(cmate_configure_project)
 project(${CMATE_PROJECT.name} VERSION ${CMATE_PROJECT.version} LANGUAGES C CXX)
 
 include(GNUInstallDirs)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL \"MSVC\")
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS _SCL_SECURE_NO_WARNINGS)

@@ -1,19 +1,23 @@
-function(cmate_die MSG)
-    message(FATAL_ERROR "CMate: error: ${MSG}")
+function(cmate_die)
+    list(JOIN ARGV " " MSGS)
+    message(FATAL_ERROR "CMate: error: ${MSGS}")
 endfunction()
 
 function(cmate_msg)
-    list(JOIN ARGV "" MSGS)
+    list(JOIN ARGV " " MSGS)
     message("CMate: ${MSGS}")
 endfunction()
 
-function(cmate_warn MSG)
-    message(WARNING "CMate: ${MSG}")
+function(cmate_warn)
+    list(JOIN ARGV " " MSGS)
+    message(WARNING "CMate: ${MSGS}")
 endfunction()
 
-function(cmate_info MSG)
+function(cmate_info)
+    list(JOIN ARGV " " MSGS)
+
     if(CMATE_VERBOSE)
-        cmate_msg(${MSG})
+        cmate_msg(${MSGS})
     endif()
 endfunction()
 
@@ -84,21 +88,34 @@ macro(cmate_setv VAR VAL)
     endif()
 endmacro()
 
-function(cmate_json_get_array JSON KEY VAR)
-    string(JSON ARRAY ERROR_VARIABLE ERR GET ${JSON} ${KEY})
+function(cmate_json_array_to_list JSON VAR)
     set(ITEMS "")
+    string(JSON T ERROR_VARIABLE ERR TYPE ${JSON})
 
-    if (NOT ERR)
-        string(JSON N LENGTH ${ARRAY})
+    if(T STREQUAL "ARRAY")
+        string(JSON N LENGTH ${JSON})
 
         if(${N} GREATER_EQUAL 1)
             math(EXPR N "${N}-1")
 
             foreach(I RANGE ${N})
-                string(JSON ITEM GET ${ARRAY} ${I})
+                string(JSON ITEM GET ${JSON} ${I})
                 list(APPEND ITEMS ${ITEM})
             endforeach()
         endif()
+    else()
+        set(ITEMS "${JSON}")
+    endif()
+
+    set(${VAR} "${ITEMS}" PARENT_SCOPE)
+endfunction()
+
+function(cmate_json_get_array JSON KEY VAR)
+    string(JSON VALUES ERROR_VARIABLE ERR GET ${JSON} ${KEY})
+    set(ITEMS "")
+
+    if (NOT ERR)
+        cmate_json_array_to_list("${VALUES}" ITEMS)
     endif()
 
     set(${VAR} ${ITEMS} PARENT_SCOPE)
@@ -127,14 +144,50 @@ function(cmate_json_get_str JSON KEY VAR DEF)
     set(${VAR} ${STR} PARENT_SCOPE)
 endfunction()
 
+function(cmate_split STR SEP VAR)
+    set(VALUES "")
+
+    while(STR MATCHES "^([^${SEP}]+)${SEP}(.+)$")
+        list(APPEND VALUES "${CMAKE_MATCH_1}")
+        set(STR "${CMAKE_MATCH_2}")
+    endwhile()
+
+    if(NOT STR STREQUAL "")
+        list(APPEND VALUES "${STR}")
+    endif()
+
+    set(${VAR} "${VALUES}" PARENT_SCOPE)
+endfunction()
+
+macro(cmate_split_conf_path PATH VAR)
+    cmate_split("${PATH}" "\\." ${VAR})
+endmacro()
+
+function(cmate_conf_get PATH VAR)
+    cmate_split_conf_path(${PATH} KEYS)
+
+    if(${ARGC} GREATER 2)
+        cmate_json_get_array("${ARGV2}" "${KEYS}" VALUE)
+    else()
+        cmate_json_get_array("${CMATE_CONF}" "${KEYS}" VALUE)
+    endif()
+
+    set(${VAR} "${VALUE}" PARENT_SCOPE)
+endfunction()
+
 function(cmate_load_conf FILE)
     set(PKGS "")
 
-    cmate_yaml_load(${FILE} CMATE_PROJECT)
+    cmate_yaml_load(${FILE} CMATE_CONF)
+    cmate_setg(CMATE_CONF "${CMATE_CONF}")
 
     foreach(VNAME "name" "version" "namespace" "std")
-        if("${CMATE_PROJECT.${VNAME}}" STREQUAL "")
+        cmate_conf_get(${VNAME} VAL)
+
+        if("${VAL}" STREQUAL "")
             cmate_die("project variable \"${VNAME}\" no set")
+        else()
+            cmate_setg(CMATE_PROJECT.${VNAME} "${VAL}")
         endif()
     endforeach()
 
