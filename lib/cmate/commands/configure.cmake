@@ -207,23 +207,13 @@ function(cmate_configure_cmake_package PKGDESC VAR)
     cmate_configure_cmake_set_pkg(${PKGDESC} PKG COMPS)
 
     if(COMPS)
-        string(
-            APPEND
-            CONTENT
-            "find_package(
-    ${PKG} CONFIG REQUIRED
-    COMPONENTS
-"
-            )
-
-        foreach(C ${COMPS})
-            string(APPEND CONTENT "        ${C}\n")
-        endforeach()
-
-        string(APPEND CONTENT ")\n")
+        list(JOIN COMPS "\n        " COMPS)
+        set(TMPL "project/CMakeLists-pkg-cmake-comps.txt.in")
     else()
-        string(APPEND CONTENT "find_package(${PKG} CONFIG REQUIRED)\n")
+        set(TMPL "project/CMakeLists-pkg-cmake.txt.in")
     endif()
+
+    cmate_tmpl_configure(${TMPL} CONTENT)
 
     set(${VAR} ${CONTENT} PARENT_SCOPE)
 endfunction()
@@ -231,10 +221,6 @@ endfunction()
 function(cmate_configure_project_cmake_packages VAR)
     set(CONTENT "")
     cmate_conf_get("packages.cmake" PKGS)
-
-    if(PKGS)
-        string(APPEND CONTENT "\n")
-    endif()
 
     foreach(PKG ${PKGS})
         cmate_configure_cmake_package(${PKG} PC)
@@ -253,10 +239,10 @@ function(cmate_configure_project_pkgconfig_packages VAR)
     endif()
 
     foreach(PKG ${PKGS})
-        string(
-            APPEND
+        cmate_tmpl_configure(
+            "project/CMakeLists-pkg-pkgconfig.txt.in"
             CONTENT
-            "pkg_check_modules(${PKG} REQUIRED IMPORTED_TARGET ${PKG})\n"
+            "\n"
         )
     endforeach()
 
@@ -282,35 +268,20 @@ function(cmate_configure_project)
         return()
     endif()
 
+    set(CONTENT "")
     set(CM_FILE "${CMATE_ROOT_DIR}/CMakeLists.txt")
 
-    cmate_project_varname("BUILD_TESTS" BUILD_TESTS)
+    set(CMATE_CMAKE_VER 3.12)
+    set(P ${CMATE_PROJECT.name})
+    string(TOUPPER "${P}" P)
 
-    string(
-        APPEND
-        CONTENT
-        "cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
-
-project(${CMATE_PROJECT.name} VERSION ${CMATE_PROJECT.version} LANGUAGES C CXX)
-
-include(GNUInstallDirs)
-
-if (CMAKE_CXX_COMPILER_ID STREQUAL \"MSVC\")
-    add_compile_definitions(_CRT_SECURE_NO_WARNINGS _SCL_SECURE_NO_WARNINGS)
-endif()
-"
-    )
+    cmate_tmpl_configure("project/CMakeLists-header.txt.in" CONTENT)
 
     # Options
-    string(APPEND CONTENT "\n")
-    string(
-        APPEND
-        CONTENT
-        "option(${BUILD_TESTS} \"Build the unit tests.\" OFF)\n"
-    )
+    cmate_tmpl_configure("project/CMakeLists-options.txt.in" CONTENT "\n")
 
     cmate_configure_project_packages(PKGS)
-    string(APPEND CONTENT "${PKGS}")
+    string(APPEND CONTENT "\n${PKGS}")
 
     set(ITARGETS "")
 

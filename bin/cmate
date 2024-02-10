@@ -11,7 +11,9 @@ set(CMATE_GIT_HOST "GH")
 set(CMATE_GH "https://github.com")
 set(CMATE_GL "https://gitlab.com")
 set(CMATE_BB "https://bitbucket.org")
+
 cmake_policy(SET CMP0057 NEW)
+cmake_policy(SET CMP0007 NEW)
 
 ## BEGIN CMATE INCLUDES
 if(CMAKE_SCRIPT_MODE_FILE AND NOT CMAKE_PARENT_LIST_FILE)
@@ -25,6 +27,7 @@ if(CMAKE_SCRIPT_MODE_FILE AND NOT CMAKE_PARENT_LIST_FILE)
     include(cmate/args)
     include(cmate/target_deps)
     include(cmate/deps)
+    include(cmate/tmpl)
     include(cmate/commands/configure)
     include(cmate/commands/reconfigure)
     include(cmate/commands/build)
@@ -42,6 +45,13 @@ endif()
 #
 ##############################################################################
 function(cmate_set_defaults)
+    # Policies
+    set(ME ${CMAKE_CURRENT_LIST_FILE})
+    get_filename_component(MYDIR "${ME}" DIRECTORY)
+    get_filename_component(MYDIR "${MYDIR}/.." REALPATH)
+
+    cmate_setg(CMATE_TMPL_DIR "${MYDIR}/templates")
+
     get_filename_component(DIR "." ABSOLUTE)
     cmate_setg(CMATE_ROOT_DIR ${DIR})
 

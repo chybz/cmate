@@ -1,0 +1,6 @@
+find_package(
+    @PKG@
+    CONFIG REQUIRED
+    COMPONENTS
+        @COMPS@
+)
