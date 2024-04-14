@@ -42,6 +42,10 @@ function(cmate_setgdir VAR VAL)
     file(MAKE_DIRECTORY ${${VAR}})
 endfunction()
 
+function(cmate_sleep DURATION)
+    execute_process(COMMAND ${CMAKE_COMMAND} -E sleep ${DURATION})
+endfunction()
+
 function(cmate_load_version)
     if(NOT "${CMATE_VERSION}" STREQUAL "")
         return()
@@ -264,15 +268,39 @@ endfunction()
 function(cmate_download URL FILE)
     if(CMATE_SIMULATE)
         cmate_msg("download ${URL} to ${FILE}")
-    else()
+        return()
+    endif()
+
+    set(WAIT_INTERVAL 5)
+    set(MAX_RETRIES 10)
+    set(RETRIES ${MAX_RETRIES})
+    set(RC 1)
+
+    while(RC)
         file(DOWNLOAD ${URL} ${FILE} STATUS ST)
-    endif()
 
-    list(GET ST 0 RC)
+        list(GET ST 0 RC)
 
-    if(RC)
-        cmate_die("download of ${URL} failed: ${ST}")
-    endif()
+        if(RC)
+            if(RETRIES)
+                math(EXPR RETRIES "${RETRIES} - 1")
+                math(EXPR ATTEMPT "${MAX_RETRIES} - ${RETRIES}")
+                cmate_warn(
+                    "download of ${URL} failed"
+                    " (attempt ${ATTEMPT} of ${MAX_RETRIES}"
+                    ", retrying in ${WAIT_INTERVAL}s)"
+                )
+                cmate_sleep(${WAIT_INTERVAL})
+            else()
+                cmate_die("download of ${URL} failed: ${ST}")
+            endif()
+        else()
+            # TODO: REMOVE ME: Fake few errors
+            if(RETRIES GREATER 8)
+                set(RC 1)
+            endif()
+        endif()
+    endwhile()
 endfunction()
 
 function(cmate_set_build_types DEBUGVAR RELEASEVAR DEFAULTS)
@@ -294,41 +322,16 @@ function(cmate_set_build_types DEBUGVAR RELEASEVAR DEFAULTS)
     cmate_setg(CMATE_BUILD_TYPES "${TYPES}")
 endfunction()
 
-function(cmate_github_get_latest REPO VAR RE)
-    set(URL "https://api.github.com/repos/${REPO}/releases/latest")
-    set(TDIR "${CMATE_TMP_DIR}/${REPO}")
-    set(INFO "${TDIR}/info.json")
+function(cmate_github_get_latest REPO PKG VAR)
+    set(URL "https://github.com/${REPO}/releases/latest/download/${PKG}")
 
-    if (NOT EXISTS ${INFO})
-        file(MAKE_DIRECTORY ${TDIR})
-        cmate_download(${URL} ${INFO})
+    set(FILE "${CMATE_DL_DIR}/${PKG}")
+
+    if (NOT EXISTS ${FILE})
+        cmate_download(${URL} ${FILE})
     endif()
 
-    file(READ ${INFO} VINFO)
-    cmate_json_get_array(${VINFO} "assets" ASSETS)
-
-    foreach(ASSET ${ASSETS})
-        string(
-            JSON
-            BDURL
-            ERROR_VARIABLE ERR
-            GET "${ASSET}" "browser_download_url"
-        )
-
-        if(NOT ERR AND ${BDURL} MATCHES ${RE})
-            string(JSON FILE GET "${ASSET}" "name")
-            set(FILE "${CMATE_DL_DIR}/${FILE}")
-
-            if (NOT EXISTS ${FILE})
-                cmate_download(${BDURL} ${FILE})
-            endif()
-
-            set(${VAR} ${FILE} PARENT_SCOPE)
-            break()
-        endif()
-    endforeach()
-
-    file(REMOVE_RECURSE ${TDIR})
+    set(${VAR} ${FILE} PARENT_SCOPE)
 endfunction()
 
 function(cmate_check_ninja)
@@ -356,11 +359,7 @@ function(cmate_check_ninja)
         endif()
 
         if(NOT EXISTS "${CMATE_ENV_BIN_DIR}/${NCMD}")
-            cmate_github_get_latest(
-                "ninja-build/ninja"
-                NZIP
-                "ninja-${NOS}.zip$"
-            )
+            cmate_github_get_latest("ninja-build/ninja" "ninja-${NOS}.zip" NZIP)
 
             file(REMOVE_RECURSE ${TDIR})
             file(ARCHIVE_EXTRACT INPUT ${NZIP} DESTINATION ${TDIR})
