@@ -30,85 +30,24 @@ Options:
                          (default: \$CACHE{CMATE_HEADER_PAT})"
 )
 
-function(cmate_configure_lib NAME TBASE INC_BASE SRC_BASE)
-    string(TOUPPER ${TBASE} VBASE)
-
+function(cmate_configure_lib NAME TARGET SRC_BASE)
     if(${CMATE_DRY_RUN})
-        cmate_msg(
-            "found library ${NAME}"
-            " (I:${INC_BASE}/${NAME}"
-            ", S:${SRC_BASE}/${NAME})"
-        )
+        cmate_msg("found library ${NAME}")
         return()
     endif()
 
-    list(APPEND CMATE_TARGETS ${TBASE})
-
-    set(HDIR "${CMATE_ROOT_DIR}/${INC_BASE}/${NAME}")
     set(SDIR "${CMATE_ROOT_DIR}/${SRC_BASE}/${NAME}")
     set(CM_FILE "${SDIR}/CMakeLists.txt")
     set(LINK_FILE "${SDIR}/${CMATE_LINKFILE}")
 
-    file(GLOB_RECURSE HEADERS "${HDIR}/${CMATE_HEADER_PAT}")
-    file(GLOB_RECURSE SOURCES "${SDIR}/${CMATE_SOURCE_PAT}")
+    # Set template variables
+    set(NS "${CMATE_PROJECT.namespace}")
+    string(TOUPPER ${TARGET} UTARGET)
 
-    string(APPEND CONTENT "add_library(${TBASE})\n")
-
-    if(CMATE_PROJECT.namespace)
-        string(
-            APPEND
-            CONTENT
-            "add_library(${CMATE_PROJECT.namespace}::${NAME} ALIAS ${TBASE})\n"
-        )
-    endif()
-
-    string(
-        APPEND
-        CONTENT
-        "
-set(${VBASE}_INC_DIR \"\${PROJECT_SOURCE_DIR}/${INC_BASE}/${NAME}\")
-file(GLOB_RECURSE ${VBASE}_HEADERS \${${VBASE}_INC_DIR}/${CMATE_HEADER_PAT})
-list(APPEND ${VBASE}_ALL_SOURCES \${${VBASE}_HEADERS})
-
-set(${VBASE}_SRC_DIR \"\${CMAKE_CURRENT_SOURCE_DIR}\")
-file(GLOB_RECURSE ${VBASE}_SOURCES \${${VBASE}_SRC_DIR}/${CMATE_SOURCE_PAT})
-list(APPEND ${VBASE}_ALL_SOURCES \${${VBASE}_SOURCES})
-
-target_sources(
-    ${TBASE}
-    PRIVATE
-        \${${VBASE}_ALL_SOURCES}
-)
-
-target_include_directories(
-    ${TBASE}
-    PUBLIC
-        $<BUILD_INTERFACE:\${${VBASE}_INC_DIR}>
-        $<INSTALL_INTERFACE:\${CMAKE_INSTALL_INCLUDEDIR}/${CMATE_PROJECT.namespace}>
-    PRIVATE
-        \${CMAKE_CURRENT_SOURCE_DIR}
-)
-"
-    )
-
-    cmate_target_link_deps(${TBASE} ${LINK_FILE} DEPS)
+    cmate_target_link_deps(${TARGET} ${LINK_FILE} DEPS)
     string(APPEND CONTENT ${DEPS})
 
-    string(
-        APPEND
-        CONTENT
-        "
-set_target_properties(
-    ${TBASE}
-    PROPERTIES
-        CXX_STANDARD ${CMATE_PROJECT.std}
-        VERSION ${CMATE_PROJECT.version}
-        SOVERSION ${CMATE_PROJECT.version_major}.${CMATE_PROJECT.version_minor}
-        EXPORT_NAME ${NAME}
-        OUTPUT_NAME ${CMATE_PROJECT.namespace}_${NAME}
-)
-"
-    )
+    cmate_tmpl_configure("targets/lib/CMakeLists.txt.in" CONTENT)
 
     if(${CMATE_DUMP})
         message(${CONTENT})
@@ -475,7 +414,7 @@ endfunction()
 function(cmate_configure_generate)
     foreach(NAME ${CMATE_LIBS})
         cmate_target_name(${NAME} "lib" "TNAME")
-        cmate_configure_lib(${NAME} ${TNAME} "include" "src/lib")
+        cmate_configure_lib(${NAME} ${TNAME} "src/lib")
     endforeach()
 
     # Binaries and tests

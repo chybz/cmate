@@ -25,7 +25,7 @@ function(cmate_install_cmake_dep)
             list(APPEND ARGS "-DCMAKE_CXX_COMPILER_LAUNCHER=${CMATE_CCACHE}")
         endif()
 
-        cmate_set_ninja()
+        cmate_check_ninja()
 
         cmate_run_prog(
             CMD
