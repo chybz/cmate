@@ -43,13 +43,21 @@ function(cmate_configure_lib NAME TARGET SRC_BASE)
     # Set template variables
     set(NS "${CMATE_PROJECT.namespace}")
     string(TOUPPER ${TARGET} UTARGET)
+    cmate_load_link_deps(${LINK_FILE} TARGET)
+    cmate_tmpl_process(
+        FROM "targets/CMakeLists-link.txt.in"
+        TO_VAR DEPS
+    )
+    cmate_tmpl_process(
+        FROM "targets/lib/CMakeLists.txt.in"
+        TO_VAR CONTENT
+    )
 
-    cmate_target_link_deps(${TARGET} ${LINK_FILE} DEPS)
-    string(APPEND CONTENT ${DEPS})
-
-    cmate_tmpl_configure("targets/lib/CMakeLists.txt.in" CONTENT)
+    message(${DEPS})
+        message(${CONTENT})
 
     if(${CMATE_DUMP})
+        message(${DEPS})
         message(${CONTENT})
     endif()
 

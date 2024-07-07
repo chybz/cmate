@@ -1,0 +1,13 @@
+# -*- CMake -*-
+% if(${TARGET_DEPS_COUNT} GREATER 0)
+target_link_libraries(
+    @TARGET@
+%     foreach(TYPE PUBLIC PRIVATE)
+%         if(${TARGET_${TYPE}_DEPS_COUNT} GREATER 0)
+    %{ ${TYPE} }%
+%             foreach(DEP ${TARGET_${TYPE}_DEPS})
+        %{ ${DEP} }%
+%             endforeach()
+%     endforeach()
+)
+% endif()

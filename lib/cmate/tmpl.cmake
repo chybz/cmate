@@ -1,32 +1,34 @@
-macro(cmate_tmpl_add WHAT)
-    string(APPEND TMPL "${WHAT}\n")
-endmacro()
+function(cmate_tmpl_process_includes FROM VAR)
+    cmate_split("${FROM}" "\n" LINES)
+    set(CONTENT "")
 
-function(cmate_tmpl_eval)
-    set(OPTS "")
-    set(SINGLE FROM TO)
-    set(MULTI "")
-    cmake_parse_arguments(TMPL "${OPTS}" "${SINGLE}" "${MULTI}" ${ARGN})
+    foreach(LINE ${LINES})
+        if(LINE MATCHES "^%#include <(.+)>$")
+            set(INC "${CMAKE_MATCH_1}")
+            cmate_tmpl_load("${INC}" TMPL)
+            string(APPEND CONTENT "${TMPL}")
+        else()
+            string(APPEND CONTENT "${LINE}")
+        endif()
+    endforeach()
 
-    if(NOT TMPL_FROM)
-        cmate_die("missing template")
-    endif()
+    set(${VAR} "${CONTENT}" PARENT_SCOPE)
+endfunction()
 
-    if(NOT TMPL_TO)
-        get_filename_component(TMPL_TO "${TMPL_FROM}" NAME)
-    endif()
-
+function(cmate_tmpl_eval FROM TO)
     set(IN_CM_BLOCK FALSE)
     set(IN_BLOCK FALSE)
     set(LINENUM 0)
     set(INLINES "")
     set(TMPL "")
 
-    cmate_tmpl_add("set(TMPL_PROCESS TRUE)")
+    cmate_split("${FROM}" "\n" LINES)
 
-    # TODO: add support for var/val eval arguments
-
-    file(STRINGS "${TMPL_FROM}" LINES)
+    foreach(LINE ${LINES})
+        if(LINE MATCHES "^%#include <(.+)>$")
+            set(INC "${CMAKE_MATCH_1}")
+        endif()
+    endforeach()
 
     foreach(LINE ${LINES})
         math(EXPR LINENUM "${LINENUM}+1")
@@ -56,12 +58,12 @@ function(cmate_tmpl_eval)
             # Skip comment lines
             continue()
         elseif(IN_CM_BLOCK)
-            cmate_tmpl_add("${LINE}")
+            string(APPEND TMPL "${LINE}\n")
             continue()
         elseif(NOT LINE MATCHES "^%[ \t]+")
             if(NOT IN_BLOCK)
                 set(IN_BLOCK TRUE)
-                cmate_tmpl_add("message([=[")
+                string(APPEND TMPL "message([=[\n")
             endif()
 
             set(INLINES "")
@@ -83,72 +85,99 @@ function(cmate_tmpl_eval)
             endwhile()
 
             # Escape text line
-            #string(REGEX REPLACE "\\\\" "\\\\\\\\" LINE "${LINE}")
+            string(REGEX REPLACE "\\\\" "\\\\\\\\" LINE "${LINE}")
             string(REGEX REPLACE "\\$" "\\\\$" LINE "${LINE}")
-            cmate_msg("ESCAPED: ${LINE}")
-
             set(IDX 0)
 
             foreach(INLINE ${INLINES})
-                string(REPLACE "__INLINE_${IDX}__" "${INLINE}")
+                string(REPLACE "__INLINE_${IDX}__" "${INLINE}" LINE "${LINE}")
                 math(EXPR IDX "${IDX}+1")
             endforeach()
         else()
             if(IN_BLOCK)
                 # Close previous block
                 set(IN_BLOCK FALSE)
-                cmate_tmpl_add("]=])")
+                string(APPEND TMPL "]=])\n")
             endif()
 
-            string(REGEX REPLACE "^%" "" LINE "${LINE}")
-            string(REGEX REPLACE "^ " "" LINE "${LINE}")
+            string(REGEX REPLACE "^% " "" LINE "${LINE}")
         endif()
 
-        cmate_tmpl_add("${LINE}")
+        string(APPEND TMPL "${LINE}\n")
     endforeach()
 
     if(IN_BLOCK)
         # Close previous block
         set(IN_BLOCK FALSE)
-        cmate_tmpl_add("]=])")
+        string(APPEND TMPL "]=])\n")
     endif()
 
-    cmate_msg("TEMPLATE IS:\n${TMPL}")
+    set(${TO} "${TMPL}" PARENT_SCOPE)
 endfunction()
 
-function(cmate_tmpl_configure FILE_BASE VAR)
-    set(VALUE "${${VAR}}")
-    set(PRE "")
-
-    if(${ARGC} GREATER 2)
-        set(PRE "${ARGV2}")
-    endif()
-
-    set(TFILE "${CMATE_TMPL_DIR}/${FILE_BASE}")
-    string(TOUPPER "CMATE_${FILE_BASE}" TVAR)
+function(cmate_tmpl_load FILE_OR_VAR VAR)
+    set(TFILE "${CMATE_TMPL_DIR}/${FILE_OR_VAR}")
+    string(TOUPPER "CMATE_${FILE_OR_VAR}" TVAR)
     string(REGEX REPLACE "[-/\\.]" "_" TVAR "${TVAR}")
     set(CONTENT "")
 
     if(${TVAR})
-        # In amalgamate mode
+        # In amalgamate mode, template is stored in a variable
         set(CONTENT "${${TVAR}}")
     elseif(EXISTS "${TFILE}")
-        # In dev/filesystem mode
+        # In dev/filesystem mode, template is in a file
         file(STRINGS "${TFILE}" LINES)
         list(FILTER LINES EXCLUDE REGEX "^# -[*]-")
         list(JOIN LINES "\n" CONTENT)
         string(APPEND CONTENT "\n")
     else()
-        cmate_die("no template content for '${FILE_BASE}'")
+        cmate_die("no template content for '${FILE_OR_VAR}'")
     endif()
 
+    cmate_tmpl_process_includes("${CONTENT}" CONTENT)
+
+    set(${VAR} "${CONTENT}" PARENT_SCOPE)
+endfunction()
+
+function(cmate_tmpl_process)
+    set(OPTS APPEND)
+    set(SINGLE FROM TO_FILE TO_VAR PRE)
+    set(MULTI "")
+    cmake_parse_arguments(TMPL "${OPTS}" "${SINGLE}" "${MULTI}" ${ARGN})
+
+    if(NOT TMPL_FROM)
+        cmate_die("missing template")
+    endif()
+
+    if(NOT TMPL_TO_FILE AND NOT TMPL_TO_VAR)
+        # No output specified, assume file derived from TMPL_FROM
+        get_filename_component(TMPL_TO_FILE "${TMPL_FROM}" NAME)
+    endif()
+
+    cmate_tmpl_load("${TMPL_FROM}" TMPL)
+    cmate_tmpl_eval("${TMPL}" CONTENT)
     string(CONFIGURE "${CONTENT}" CONTENT @ONLY)
 
-    if(VALUE)
-        string(APPEND VALUE "${PRE}")
+    if(TMPL_TO_FILE)
+        if(TMPL_APPEND)
+            set(FILE_MODE "APPEND")
+        else()
+            set(FILE_MODE "WRITE")
+        endif()
+
+        file(${FILE_MODE} "${TMPL_TO_FILE}" "${CONTENT}")
+        cmate_msg("wrote ${TMPL_TO_FILE}")
+    elseif(TMPL_TO_VAR)
+        if(TMPL_APPEND)
+            set(VALUE "${TMPL_TO_VAR}")
+        else()
+            set(VALUE "")
+        endif()
+
+        string(APPEND VALUE "${CONTENT}")
+
+        set(${TMPL_TO_VAR} "${VALUE}" PARENT_SCOPE)
+    else()
+        cmate_die("missing template destination")
     endif()
-
-    string(APPEND VALUE "${CONTENT}")
-
-    set(${VAR} "${VALUE}" PARENT_SCOPE)
 endfunction()
