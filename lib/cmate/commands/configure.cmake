@@ -45,16 +45,11 @@ function(cmate_configure_lib NAME TARGET SRC_BASE)
     string(TOUPPER ${TARGET} UTARGET)
     cmate_load_link_deps(${LINK_FILE} TARGET)
     cmate_tmpl_process(
-        FROM "targets/CMakeLists-link.txt.in"
-        TO_VAR DEPS
-    )
-    cmate_tmpl_process(
         FROM "targets/lib/CMakeLists.txt.in"
         TO_VAR CONTENT
     )
 
-    message(${DEPS})
-        message(${CONTENT})
+    message("${CONTENT}")
 
     if(${CMATE_DUMP})
         message(${DEPS})

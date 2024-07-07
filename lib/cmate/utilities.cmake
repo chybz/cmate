@@ -163,6 +163,32 @@ function(cmate_split STR SEP VAR)
     set(${VAR} "${VALUES}" PARENT_SCOPE)
 endfunction()
 
+function(cmate_split_lines STR VAR)
+    set(VALUES "")
+    set(SEP "\n")
+
+    while(STR MATCHES "^([^${SEP}]*)${SEP}(.*)$")
+        if(CMAKE_MATCH_1 STREQUAL "")
+            list(APPEND VALUES "<EMPTY>")
+        else()
+            list(APPEND VALUES "${CMAKE_MATCH_1}")
+        endif()
+
+        set(STR "${CMAKE_MATCH_2}")
+    endwhile()
+
+    if(NOT STR STREQUAL "")
+        list(APPEND VALUES "${STR}")
+    endif()
+
+    set(${VAR} "${VALUES}" PARENT_SCOPE)
+endfunction()
+
+function(cmate_replace_empty VAR)
+    string(REPLACE "<EMPTY>" " " VALUE "${${VAR}}")
+    set(${VAR} "${VALUE}" PARENT_SCOPE)
+endfunction()
+
 macro(cmate_split_conf_path PATH VAR)
     cmate_split("${PATH}" "\\." ${VAR})
 endmacro()

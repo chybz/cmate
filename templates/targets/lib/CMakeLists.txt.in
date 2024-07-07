@@ -23,6 +23,8 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+%#include <targets/CMakeLists-link.txt.in>
+
 set_target_properties(
     @TARGET@
     PROPERTIES

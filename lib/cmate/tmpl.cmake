@@ -1,16 +1,19 @@
 function(cmate_tmpl_process_includes FROM VAR)
-    cmate_split("${FROM}" "\n" LINES)
+    cmate_split_lines("${FROM}" LINES)
     set(CONTENT "")
+    set(LINENUM 0)
 
     foreach(LINE ${LINES})
         if(LINE MATCHES "^%#include <(.+)>$")
             set(INC "${CMAKE_MATCH_1}")
             cmate_tmpl_load("${INC}" TMPL)
-            string(APPEND CONTENT "${TMPL}")
+            string(APPEND CONTENT "${TMPL}\n")
         else()
-            string(APPEND CONTENT "${LINE}")
+            string(APPEND CONTENT "${LINE}\n")
         endif()
     endforeach()
+
+    cmate_replace_empty(CONTENT)
 
     set(${VAR} "${CONTENT}" PARENT_SCOPE)
 endfunction()
@@ -22,13 +25,7 @@ function(cmate_tmpl_eval FROM TO)
     set(INLINES "")
     set(TMPL "")
 
-    cmate_split("${FROM}" "\n" LINES)
-
-    foreach(LINE ${LINES})
-        if(LINE MATCHES "^%#include <(.+)>$")
-            set(INC "${CMAKE_MATCH_1}")
-        endif()
-    endforeach()
+    cmate_split_lines("${FROM}" LINES)
 
     foreach(LINE ${LINES})
         math(EXPR LINENUM "${LINENUM}+1")
@@ -134,7 +131,9 @@ function(cmate_tmpl_load FILE_OR_VAR VAR)
         cmate_die("no template content for '${FILE_OR_VAR}'")
     endif()
 
+    cmate_msg("=== PROCESS INC FOR ${FILE_OR_VAR}")
     cmate_tmpl_process_includes("${CONTENT}" CONTENT)
+    cmate_msg("=== PROCESSED INC FOR ${FILE_OR_VAR}")
 
     set(${VAR} "${CONTENT}" PARENT_SCOPE)
 endfunction()
