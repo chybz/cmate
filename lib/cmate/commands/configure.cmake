@@ -155,7 +155,7 @@ function(cmate_configure_cmake_package PKGDESC VAR)
         set(TMPL "project/CMakeLists-pkg-cmake.txt.in")
     endif()
 
-    cmate_tmpl_configure(${TMPL} CONTENT)
+    cmate_tmpl_process(FROM ${TMPL} TO_VAR CONTENT)
 
     set(${VAR} ${CONTENT} PARENT_SCOPE)
 endfunction()
@@ -181,10 +181,10 @@ function(cmate_configure_project_pkgconfig_packages VAR)
     endif()
 
     foreach(PKG ${PKGS})
-        cmate_tmpl_configure(
-            "project/CMakeLists-pkg-pkgconfig.txt.in"
-            CONTENT
-            "\n"
+        cmate_tmpl_process(
+            FROM "project/CMakeLists-pkg-pkgconfig.txt.in"
+            TO_VAR CONTENT
+            PRE "\n"
         )
     endforeach()
 
@@ -217,10 +217,10 @@ function(cmate_configure_project)
     set(P ${CMATE_PROJECT.name})
     string(TOUPPER "${P}" P)
 
-    cmate_tmpl_configure("project/CMakeLists-header.txt.in" CONTENT)
+    cmate_tmpl_process(FROM "project/CMakeLists-header.txt.in" TO_VAR CONTENT)
 
     # Options
-    cmate_tmpl_configure("project/CMakeLists-options.txt.in" CONTENT "\n")
+    cmate_tmpl_process(FROM "project/CMakeLists-options.txt.in" TO_VAR CONTENT PRE "\n")
 
     cmate_configure_project_packages(PKGS)
     string(APPEND CONTENT "\n${PKGS}")

@@ -4,7 +4,9 @@ function(cmate_tmpl_process_includes FROM VAR)
     set(LINENUM 0)
 
     foreach(LINE ${LINES})
-        if(LINE MATCHES "^%#include <(.+)>$")
+        if(LINE STREQUAL "<EMPTY>")
+            string(APPEND CONTENT "\n")
+        elseif(LINE MATCHES "^%#include <(.+)>$")
             set(INC "${CMAKE_MATCH_1}")
             cmate_tmpl_load("${INC}" TMPL)
             string(APPEND CONTENT "${TMPL}\n")
@@ -12,8 +14,6 @@ function(cmate_tmpl_process_includes FROM VAR)
             string(APPEND CONTENT "${LINE}\n")
         endif()
     endforeach()
-
-    cmate_replace_empty(CONTENT)
 
     set(${VAR} "${CONTENT}" PARENT_SCOPE)
 endfunction()
@@ -24,13 +24,18 @@ function(cmate_tmpl_eval FROM TO)
     set(LINENUM 0)
     set(INLINES "")
     set(TMPL "")
+    set(RESULT "")
 
+    # Empty lines are "<EMPTY>"
     cmate_split_lines("${FROM}" LINES)
 
     foreach(LINE ${LINES})
         math(EXPR LINENUM "${LINENUM}+1")
 
-        if(LINE MATCHES "^%{CMake}%")
+        if(LINE STREQUAL "<EMPTY>")
+            string(APPEND TMPL "\n")
+            continue()
+        elseif(LINE MATCHES "^%{CMake}%")
             # Verbatim CMake block begin
             if(IN_CM_BLOCK)
                 cmate_die("line ${LINENUM}: unclosed previous block")
@@ -60,7 +65,7 @@ function(cmate_tmpl_eval FROM TO)
         elseif(NOT LINE MATCHES "^%[ \t]+")
             if(NOT IN_BLOCK)
                 set(IN_BLOCK TRUE)
-                string(APPEND TMPL "message([=[\n")
+                string(APPEND TMPL "string(APPEND RESULT [=[\n")
             endif()
 
             set(INLINES "")
@@ -109,7 +114,11 @@ function(cmate_tmpl_eval FROM TO)
         string(APPEND TMPL "]=])\n")
     endif()
 
-    set(${TO} "${TMPL}" PARENT_SCOPE)
+    cmake_language(EVAL CODE "${TMPL}")
+
+    cmate_msg("@@@@@@ RESULT is ===\n${RESULT}\n====")
+
+    set(${TO} "${RESULT}" PARENT_SCOPE)
 endfunction()
 
 function(cmate_tmpl_load FILE_OR_VAR VAR)
@@ -131,9 +140,7 @@ function(cmate_tmpl_load FILE_OR_VAR VAR)
         cmate_die("no template content for '${FILE_OR_VAR}'")
     endif()
 
-    cmate_msg("=== PROCESS INC FOR ${FILE_OR_VAR}")
     cmate_tmpl_process_includes("${CONTENT}" CONTENT)
-    cmate_msg("=== PROCESSED INC FOR ${FILE_OR_VAR}")
 
     set(${VAR} "${CONTENT}" PARENT_SCOPE)
 endfunction()
@@ -148,6 +155,7 @@ function(cmate_tmpl_process)
         cmate_die("missing template")
     endif()
 
+    # TODO: handle conflicting FILE/VAR
     if(NOT TMPL_TO_FILE AND NOT TMPL_TO_VAR)
         # No output specified, assume file derived from TMPL_FROM
         get_filename_component(TMPL_TO_FILE "${TMPL_FROM}" NAME)

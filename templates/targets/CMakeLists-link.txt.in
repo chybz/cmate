@@ -8,6 +8,7 @@ target_link_libraries(
 %             foreach(DEP ${TARGET_${TYPE}_DEPS})
         %{ ${DEP} }%
 %             endforeach()
+%         endif()
 %     endforeach()
 )
 % endif()
