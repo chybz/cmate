@@ -40,9 +40,11 @@ function(cmate_configure_lib NAME TARGET SRC_BASE)
     set(CM_FILE "${SDIR}/CMakeLists.txt")
     set(LINK_FILE "${SDIR}/${CMATE_LINKFILE}")
 
-    # Set template variables
-    set(NS "${CMATE_PROJECT.namespace}")
-    string(TOUPPER ${TARGET} UTARGET)
+    # Set target template variables
+    set(T.NAME "${NAME}")
+    set(T.TNAME "${TARGET}")
+    string(TOUPPER ${TARGET} T.UTNAME)
+
     cmate_load_link_deps(${LINK_FILE} TARGET)
     cmate_tmpl_process(
         FROM "targets/lib/CMakeLists.txt.in"
@@ -127,10 +129,8 @@ function(cmate_configure_test NAME TBASE SRC_BASE)
     cmate_configure_prog("test" ${NAME} ${TBASE} ${SRC_BASE})
 endfunction()
 
-function(cmate_configure_cmake_set_pkg PKGDESC PKGVAR COMPSVAR)
-    set(PKG "")
+function(cmate_configure_cmake_package PKGDESC VAR)
     set(COMPS "")
-
     string(JSON T ERROR_VARIABLE ERR TYPE ${PKGDESC})
 
     if(T STREQUAL "OBJECT")
@@ -140,69 +140,40 @@ function(cmate_configure_cmake_set_pkg PKGDESC PKGVAR COMPSVAR)
         set(PKG "${PKGDESC}")
     endif()
 
-    set(${PKGVAR} ${PKG} PARENT_SCOPE)
-    set(${COMPSVAR} ${COMPS} PARENT_SCOPE)
-endfunction()
+    set("${VAR}.PKG" ${PKG} PARENT_SCOPE)
+    set("${VAR}.COMPS" ${COMPS} PARENT_SCOPE)
 
-function(cmate_configure_cmake_package PKGDESC VAR)
-    set(CONTENT "")
-    cmate_configure_cmake_set_pkg(${PKGDESC} PKG COMPS)
-
-    if(COMPS)
-        list(JOIN COMPS "\n        " COMPS)
-        set(TMPL "project/CMakeLists-pkg-cmake-comps.txt.in")
-    else()
-        set(TMPL "project/CMakeLists-pkg-cmake.txt.in")
-    endif()
-
-    cmate_tmpl_process(FROM ${TMPL} TO_VAR CONTENT)
-
-    set(${VAR} ${CONTENT} PARENT_SCOPE)
+    list(LENGTH COMPS COMP_COUNT)
+    set("${VAR}.COMP_COUNT" ${COMP_COUNT} PARENT_SCOPE)
 endfunction()
 
 function(cmate_configure_project_cmake_packages VAR)
-    set(CONTENT "")
     cmate_conf_get("packages.cmake" PKGS)
+
+    list(LENGTH PKGS COUNT)
+    set(PKGNAMES "")
 
     foreach(PKG ${PKGS})
         cmate_configure_cmake_package(${PKG} PC)
-        string(APPEND CONTENT "${PC}")
+        list(APPEND PKGNAMES "${PC.PKG}")
+        set("${VAR}.PKGS.${PC.PKG}.COMPS" "${PC.COMPS}" PARENT_SCOPE)
+        set("${VAR}.PKGS.${PC.PKG}.COMP_COUNT" "${PC.COMP_COUNT}" PARENT_SCOPE)
     endforeach()
 
-    set(${VAR} ${CONTENT} PARENT_SCOPE)
+    set("${VAR}.PKGS" ${PKGNAMES} PARENT_SCOPE)
+
+    list(LENGTH PKGNAMES PKG_COUNT)
+    set("${VAR}.PKG_COUNT" ${PKG_COUNT} PARENT_SCOPE)
 endfunction()
 
 function(cmate_configure_project_pkgconfig_packages VAR)
-    set(CONTENT "")
     cmate_conf_get("packages.pkgconfig" PKGS)
 
-    if(PKGS)
-        string(APPEND CONTENT "\n")
-    endif()
+    list(LENGTH PKGNAMES COUNT)
+    set("${VAR}.PKGS" ${PKGNAMES} PARENT_SCOPE)
 
-    foreach(PKG ${PKGS})
-        cmate_tmpl_process(
-            FROM "project/CMakeLists-pkg-pkgconfig.txt.in"
-            TO_VAR CONTENT
-            PRE "\n"
-        )
-    endforeach()
-
-    set(${VAR} ${CONTENT} PARENT_SCOPE)
-endfunction()
-
-function(cmate_configure_project_packages VAR)
-    set(CONTENT "")
-
-    foreach(PTYPE "cmake" "pkgconfig")
-        cmake_language(
-            CALL "cmate_configure_project_${PTYPE}_packages"
-            PKGS
-        )
-        string(APPEND CONTENT "${PKGS}")
-    endforeach()
-
-    set(${VAR} ${CONTENT} PARENT_SCOPE)
+    list(LENGTH PKGNAMES PKG_COUNT)
+    set("${VAR}.PKG_COUNT" ${PKG_COUNT} PARENT_SCOPE)
 endfunction()
 
 function(cmate_configure_project)
@@ -210,100 +181,58 @@ function(cmate_configure_project)
         return()
     endif()
 
-    set(CONTENT "")
     set(CM_FILE "${CMATE_ROOT_DIR}/CMakeLists.txt")
-
     set(CMATE_CMAKE_VER 3.12)
-    set(P ${CMATE_PROJECT.name})
-    string(TOUPPER "${P}" P)
 
-    cmate_tmpl_process(FROM "project/CMakeLists-header.txt.in" TO_VAR CONTENT)
+    # Prepare dependencies names/structure
+    foreach(PLIST "cmake;CM" "pkgconfig;PC")
+        list(GET PLIST 0 PTYPE)
+        list(GET PLIST 1 PVAR)
+        cmake_language(
+            CALL "cmate_configure_project_${PTYPE}_packages"
+            "P.${PVAR}"
+        )
+    endforeach()
 
-    # Options
-    cmate_tmpl_process(FROM "project/CMakeLists-options.txt.in" TO_VAR CONTENT PRE "\n")
-
-    cmate_configure_project_packages(PKGS)
-    string(APPEND CONTENT "\n${PKGS}")
-
-    set(ITARGETS "")
+    set(P.TARGETS.BIN "")
+    set(P.TARGETS.LIB "")
 
     # Target subdirs
     if(CMATE_BINS OR CMATE_LIBS)
-        string(APPEND CONTENT "\n")
-
         foreach(TYPE "LIB" "BIN")
             foreach(T ${CMATE_${TYPE}S})
                 cmate_target_name(${T} ${TYPE} TNAME)
-                list(APPEND ITARGETS ${TNAME})
+                list(APPEND P.TARGETS.${TYPE} ${TNAME})
 
                 set(TDIR "src/${TYPE}/${T}")
                 string(TOLOWER "${TDIR}" TDIR)
-                string(APPEND CONTENT "add_subdirectory(${TDIR})\n")
+
+                set("P.TARGETS.${TYPE}.${TNAME}.SUBDIR" "${TDIR}")
             endforeach()
         endforeach()
     else()
         cmate_die("no targets to configure")
     endif()
 
+    list(APPEND P.TARGETS.INSTALL "${P.TARGETS.LIB}" "${P.TARGETS.BIN}")
+
+    set(P.TARGETS.TEST "")
+
     if(CMATE_TESTS)
-        string(APPEND CONTENT "if(${BUILD_TESTS})\n")
-        string(APPEND CONTENT "    include(CTest)\n")
-        string(APPEND CONTENT "    enable_testing()\n")
+        set(TYPE "TEST")
 
         foreach(T ${CMATE_TESTS})
-            set(TDIR "src/tests/${T}")
+            cmate_target_name(${T} ${TYPE} TNAME)
+            list(APPEND P.TARGETS.TEST ${TNAME})
+
+            set(TDIR "src/${TYPE}/${T}")
             string(TOLOWER "${TDIR}" TDIR)
-            string(APPEND CONTENT "    add_subdirectory(${TDIR})\n")
-        endforeach()
 
-        string(APPEND CONTENT "endif()\n")
-    endif()
-
-    string(
-        APPEND
-        CONTENT
-        "
-install(
-    TARGETS"
-    )
-
-    foreach(TARGET ${ITARGETS})
-        string(APPEND CONTENT "\n        ${TARGET}")
-    endforeach()
-
-    string(
-        APPEND
-        CONTENT
-        "
-    EXPORT ${CMATE_PROJECT.name}-config
-    RUNTIME DESTINATION \${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION \${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION \${CMAKE_INSTALL_LIBDIR}
-)
-
-install(
-    EXPORT ${CMATE_PROJECT.name}-config
-    FILE ${CMATE_PROJECT.name}-config.cmake
-    NAMESPACE ${CMATE_PROJECT.namespace}::
-    DESTINATION \${CMAKE_INSTALL_LIBDIR}/cmake/${CMATE_PROJECT.name}
-)
-"
-    )
-
-    if (IS_DIRECTORY "${CMATE_ROOT_DIR}/include")
-        foreach(LIB ${CMATE_LIBS})
-            string(
-                APPEND
-                CONTENT
-                "
-install(
-    DIRECTORY \"\${PROJECT_SOURCE_DIR}/include/${LIB}/\"
-    DESTINATION \${CMAKE_INSTALL_INCLUDEDIR}/${CMATE_PROJECT.namespace}
-)
-"
-            )
+            set("P.TARGETS.${TYPE}.${TNAME}.SUBDIR" "${TDIR}")
         endforeach()
     endif()
+
+    cmate_tmpl_process(FROM "project/CMakeLists.txt.in" TO_VAR CONTENT)
 
     file(WRITE ${CM_FILE} ${CONTENT})
 endfunction()
@@ -415,6 +344,20 @@ function(cmate_configure_needed VAR LIBS BINS TESTS)
 endfunction()
 
 function(cmate_configure_generate)
+    # Set CMate global template variables
+    set(CM.HPAT "${CMATE_HEADER_PAT}")
+    set(CM.SPAT "${CMATE_SOURCE_PAT}")
+
+    # Set project level template variables
+    set(P.NAME "${CMATE_PROJECT.name}")
+    string(TOUPPER "${CMATE_PROJECT.name}" P.UNAME)
+    set(P.VER "${CMATE_PROJECT.version}")
+    set(P.VER_MAJOR "${CMATE_PROJECT.version_major}")
+    set(P.VER_MINOR "${CMATE_PROJECT.version_minor}")
+    set(P.VER_PATCH "${CMATE_PROJECT.version_patch}")
+    set(P.NS "${CMATE_PROJECT.namespace}")
+    set(P.STD "${CMATE_PROJECT.std}")
+
     foreach(NAME ${CMATE_LIBS})
         cmate_target_name(${NAME} "lib" "TNAME")
         cmate_configure_lib(${NAME} ${TNAME} "src/lib")

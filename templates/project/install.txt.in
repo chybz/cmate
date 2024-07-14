@@ -1,0 +1,25 @@
+# -*- CMake -*-
+install(
+    TARGETS
+% foreach(TARGET ${P.TARGETS.INSTALL})
+        %{ ${TARGET} }%
+% endforeach()
+    EXPORT @P.NAME@-config
+    RUNTIME DESTINATION \${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION \${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION \${CMAKE_INSTALL_LIBDIR}
+)
+
+install(
+    EXPORT @P.NAME@-config
+    FILE @P.NAME@-config.cmake
+    NAMESPACE @P.NS@::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/@P.NAME@
+)
+% foreach(TARGET ${P.TARGETS.LIBS})
+
+install(
+    DIRECTORY "${PROJECT_SOURCE_DIR}/include/%{ ${TARGET} }%"
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/@P.NS@
+)
+% endforeach()

@@ -1,7 +1,7 @@
 # -*- CMake -*-
 % if(${TARGET_DEPS_COUNT} GREATER 0)
 target_link_libraries(
-    @TARGET@
+    @T.TNAME@
 %     foreach(TYPE PUBLIC PRIVATE)
 %         if(${TARGET_${TYPE}_DEPS_COUNT} GREATER 0)
     %{ ${TYPE} }%

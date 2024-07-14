@@ -1,0 +1,12 @@
+# -*- CMake -*-
+%#include <project/header.txt.in>
+%#include <project/options.txt.in>
+
+%#include <project/pkg-cmake.txt.in>
+%#include <project/pkg-pkgconfig.txt.in>
+
+%#include <project/targets.txt.in>
+
+%#include <project/install.txt.in>
+
+%#include <project/footer.txt.in>

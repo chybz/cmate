@@ -1,0 +1,11 @@
+# -*- CMake -*-
+set(${@P.UNAME@_LOCAL_DEV} OFF)
+
+if(${@P.UNAME@_LOCAL_DEV})
+    set(@P.UNAME@_BUILD_TESTS_INIT ON)
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+else()
+    set(@P.UNAME@_BUILD_TESTS_INIT OFF)
+endif()
+
+option(@P.UNAME@_BUILD_TESTS "Build the unit tests." ${@P.UNAME@_BUILD_TESTS_INIT})

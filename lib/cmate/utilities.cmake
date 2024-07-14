@@ -46,32 +46,7 @@ function(cmate_sleep DURATION)
     execute_process(COMMAND ${CMAKE_COMMAND} -E sleep ${DURATION})
 endfunction()
 
-function(cmate_load_version)
-    if(NOT "${CMATE_VERSION}" STREQUAL "")
-        return()
-    endif()
-
-    if("${CMATE_VERSION_FILE}" STREQUAL "")
-        cmate_setg(
-            CMATE_VERSION_FILE
-            "${CMATE_ROOT_DIR}/version.txt"
-        )
-    endif()
-
-    if(EXISTS ${CMATE_VERSION_FILE})
-        file(
-            STRINGS ${CMATE_VERSION_FILE} VER
-            REGEX "^[^\\.]+\\.[^\\.]+\\.[^\\.]+$"
-            LIMIT_COUNT 1
-        )
-
-        cmate_setg(CMATE_VERSION ${VER})
-    endif()
-endfunction()
-
 function(cmate_set_version)
-    cmate_load_version()
-
     if("${CMATE_PROJECT.version}" STREQUAL "")
         cmate_warn("using default version: 0.1.0")
         cmate_setg(CMATE_PROJECT.version "0.1.0")

@@ -1,0 +1,15 @@
+# -*- CMake -*-
+
+% foreach(TYPE "LIB" "BIN")
+%     foreach(T ${P.TARGETS.${TYPE}})
+add_subdirectory(%{ ${P.TARGETS.${TYPE}.${T}.SUBDIR} }%)
+%     endforeach()
+% endforeach()
+
+if(@P.UNAME@_BUILD_TESTS)
+    include(CTest)
+    enable_testing()
+% foreach(T ${P.TARGETS.TEST})
+    add_subdirectory(%{ ${P.TARGETS.TEST.${T}.SUBDIR} }%)
+% endforeach()
+endif()

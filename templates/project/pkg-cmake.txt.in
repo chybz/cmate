@@ -1,0 +1,17 @@
+# -*- CMake -*-
+% if(${P.CM.PKG_COUNT} GREATER 0)
+%     foreach(PKG ${P.CM.PKGS})
+%         if(${P.CM.PKGS.${PKG}.COMP_COUNT} GREATER 0)
+find_package(
+    %{ ${PKG} }%
+    CONFIG REQUIRED
+    COMPONENTS
+%         foreach(COMP ${P.CM.$PKG.COMPS})
+        %{ ${COMP} }%
+%         endforeach()
+)
+%         else()
+find_package(%{ ${PKG} }% CONFIG REQUIRED)
+%         endif()
+%     endforeach()
+% endif()

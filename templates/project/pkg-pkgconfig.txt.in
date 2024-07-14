@@ -1,0 +1,6 @@
+# -*- CMake -*-
+% if(${P.PC.PKG_COUNT} GREATER 0)
+%     foreach(PKG ${P.PC.PKGS})
+pkg_check_modules(%{ ${PKG} }% REQUIRED IMPORTED_TARGET %{ ${PKG} }%)
+%     endforeach()
+% endif()

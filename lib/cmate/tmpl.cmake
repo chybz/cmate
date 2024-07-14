@@ -1,7 +1,6 @@
 function(cmate_tmpl_process_includes FROM VAR)
     cmate_split_lines("${FROM}" LINES)
     set(CONTENT "")
-    set(LINENUM 0)
 
     foreach(LINE ${LINES})
         if(LINE STREQUAL "<EMPTY>")
@@ -17,6 +16,20 @@ function(cmate_tmpl_process_includes FROM VAR)
 
     set(${VAR} "${CONTENT}" PARENT_SCOPE)
 endfunction()
+
+macro(cmate_tmpl_block_begin)
+    if(NOT IN_BLOCK)
+        set(IN_BLOCK TRUE)
+        string(APPEND TMPL "string(APPEND RESULT [=[\n")
+    endif()
+endmacro()
+
+macro(cmate_tmpl_block_end)
+    if(IN_BLOCK)
+        set(IN_BLOCK FALSE)
+        string(APPEND TMPL "]=])\n")
+    endif()
+endmacro()
 
 function(cmate_tmpl_eval FROM TO)
     set(IN_CM_BLOCK FALSE)
@@ -53,70 +66,44 @@ function(cmate_tmpl_eval FROM TO)
             endif()
 
             continue()
+        elseif(IN_CM_BLOCK)
+            string(APPEND TMPL "${LINE}\n")
+            continue()
         elseif(LINE MATCHES "^%[ \t]*$")
             # Skip empty lines
             continue()
         elseif(LINE MATCHES "^%#")
             # Skip comment lines
             continue()
-        elseif(IN_CM_BLOCK)
-            string(APPEND TMPL "${LINE}\n")
-            continue()
         elseif(NOT LINE MATCHES "^%[ \t]+")
-            if(NOT IN_BLOCK)
-                set(IN_BLOCK TRUE)
-                string(APPEND TMPL "string(APPEND RESULT [=[\n")
-            endif()
+            if(LINE MATCHES "(.*)%{[ \t]+(.*)")
+                cmate_tmpl_block_end()
 
-            set(INLINES "")
-
-            # Replace inlines
-            while(LINE MATCHES "(.*)%{[ \t]+(.*)")
-                set(BEFORE "${CMAKE_MATCH_1}")
-                set(REST "${CMAKE_MATCH_2}")
-
-                if(REST MATCHES "(.*)[ \t]+}%(.*)")
-                    set(INLINE "${CMAKE_MATCH_1}")
+                while(LINE MATCHES "(.*)%{[ \t]+(.*)")
+                    string(APPEND TMPL "string(APPEND RESULT [=[${CMAKE_MATCH_1}]=])\n")
                     set(REST "${CMAKE_MATCH_2}")
-                    list(LENGTH INLINES IDX)
-                    list(APPEND INLINES "${INLINE}")
-                    set(LINE "${BEFORE}__INLINE_${IDX}__${REST}")
-                else()
-                    cmate_die("unmatched inline in: ${LINE}")
-                endif()
-            endwhile()
 
-            # Escape text line
-            string(REGEX REPLACE "\\\\" "\\\\\\\\" LINE "${LINE}")
-            string(REGEX REPLACE "\\$" "\\\\$" LINE "${LINE}")
-            set(IDX 0)
-
-            foreach(INLINE ${INLINES})
-                string(REPLACE "__INLINE_${IDX}__" "${INLINE}" LINE "${LINE}")
-                math(EXPR IDX "${IDX}+1")
-            endforeach()
-        else()
-            if(IN_BLOCK)
-                # Close previous block
-                set(IN_BLOCK FALSE)
-                string(APPEND TMPL "]=])\n")
+                    if(REST MATCHES "(.*)[ \t]+}%(.*)")
+                        string(APPEND TMPL "string(APPEND RESULT \"${CMAKE_MATCH_1}\")\n")
+                        set(LINE "${CMAKE_MATCH_2}")
+                    else()
+                        cmate_die("unmatched inline in: ${LINE}")
+                    endif()
+                endwhile()
             endif()
 
+            cmate_tmpl_block_begin()
+        else()
+            cmate_tmpl_block_end()
             string(REGEX REPLACE "^% " "" LINE "${LINE}")
         endif()
 
         string(APPEND TMPL "${LINE}\n")
     endforeach()
 
-    if(IN_BLOCK)
-        # Close previous block
-        set(IN_BLOCK FALSE)
-        string(APPEND TMPL "]=])\n")
-    endif()
+    cmate_tmpl_block_end()
 
     cmake_language(EVAL CODE "${TMPL}")
-
-    cmate_msg("@@@@@@ RESULT is ===\n${RESULT}\n====")
 
     set(${TO} "${RESULT}" PARENT_SCOPE)
 endfunction()

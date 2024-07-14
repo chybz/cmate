@@ -1,6 +1,7 @@
+# -*- CMake -*-
 cmake_minimum_required(VERSION @CMATE_CMAKE_VER@ FATAL_ERROR)
 
-project(@CMATE_PROJECT.name@ VERSION @CMATE_PROJECT.version@ LANGUAGES C CXX)
+project(@P.NAME@ VERSION @P.VER@ LANGUAGES C CXX)
 
 include(GNUInstallDirs)
 
