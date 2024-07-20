@@ -1,5 +1,6 @@
 # -*- CMake -*-
 % if(${TARGET_DEPS_COUNT} GREATER 0)
+
 target_link_libraries(
     @T.TNAME@
 %     foreach(TYPE PUBLIC PRIVATE)

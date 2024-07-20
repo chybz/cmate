@@ -1,4 +1,5 @@
 # -*- CMake -*-
+
 set(${@P.UNAME@_LOCAL_DEV} OFF)
 
 if(${@P.UNAME@_LOCAL_DEV})

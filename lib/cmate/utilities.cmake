@@ -140,11 +140,12 @@ endfunction()
 
 function(cmate_split_lines STR VAR)
     set(VALUES "")
-    set(SEP "\n")
+    set(SEP "\r\n")
 
-    while(STR MATCHES "^([^${SEP}]*)${SEP}(.*)$")
+    # REGEX MATCHALL can't match empty strings, so "manual" solution... Yeah...
+    while(STR MATCHES "^([^${SEP}]*)[${SEP}](.*)$")
         if(CMAKE_MATCH_1 STREQUAL "")
-            list(APPEND VALUES "<EMPTY>")
+            list(APPEND VALUES "${CMATE_EMPTY_LINE_MARKER}")
         else()
             list(APPEND VALUES "${CMAKE_MATCH_1}")
         endif()
@@ -157,11 +158,6 @@ function(cmate_split_lines STR VAR)
     endif()
 
     set(${VAR} "${VALUES}" PARENT_SCOPE)
-endfunction()
-
-function(cmate_replace_empty VAR)
-    string(REPLACE "<EMPTY>" " " VALUE "${${VAR}}")
-    set(${VAR} "${VALUE}" PARENT_SCOPE)
 endfunction()
 
 macro(cmate_split_conf_path PATH VAR)

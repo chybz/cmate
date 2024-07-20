@@ -74,6 +74,8 @@ function(cmate_set_defaults)
 
     cmate_setg(CMATE_HEADER_PAT "*.hpp")
     cmate_setg(CMATE_SOURCE_PAT "*.[ch]pp")
+
+    cmate_setg(CMATE_EMPTY_LINE_MARKER "@CMATE_EMPTY_LINE@")
 endfunction()
 
 function(cmate_set_compilers)

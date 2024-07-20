@@ -51,8 +51,6 @@ function(cmate_configure_lib NAME TARGET SRC_BASE)
         TO_VAR CONTENT
     )
 
-    message("${CONTENT}")
-
     if(${CMATE_DUMP})
         message(${DEPS})
         message(${CONTENT})
@@ -208,6 +206,7 @@ function(cmate_configure_project)
                 string(TOLOWER "${TDIR}" TDIR)
 
                 set("P.TARGETS.${TYPE}.${TNAME}.SUBDIR" "${TDIR}")
+                set("P.TARGETS.${TYPE}.${TNAME}.NAME" "${T}")
             endforeach()
         endforeach()
     else()
