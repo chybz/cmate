@@ -180,6 +180,7 @@ function(cmate_load_conf FILE)
     set(PKGS "")
 
     cmate_yaml_load(${FILE} CMATE_CONF)
+    message("==== CONF:\n${CMATE_CONF}\n====")
     cmate_setg(CMATE_CONF "${CMATE_CONF}")
 
     foreach(VNAME "name" "version" "namespace" "std")

@@ -1,3 +1,8 @@
+function(cmate_yaml_load2 FILE VAR)
+endfunction()
+
+
+
 ###############################################################################
 #
 # Simple YAML parser based on YAML::Tiny
