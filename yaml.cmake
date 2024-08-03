@@ -8,7 +8,7 @@ namespace: cucumber
 std: 17
 packages:
   cmake:
-    - nlohmann_json
+    - nlohmann_json:
 deps:
   - nlohmann/json@v3.11.3:
     - -DJSON_BuildTests=OFF
@@ -28,10 +28,10 @@ function(yaml_count_indent LINE VAR)
     set(LEVEL 0)
 
     if(LINE MATCHES "^([ ]+)")
-        string(LENGTH "${CMATE_MATCH_1}" LEVEL)
+        string(LENGTH "${CMAKE_MATCH_1}" LEVEL)
     endif()
 
-    set("${VAR}" LEVEL PARENT_SCOPE)
+    set("${VAR}" ${LEVEL} PARENT_SCOPE)
 endfunction()
 
 function(yaml_unquote STR VAR)
@@ -77,6 +77,8 @@ endfunction()
 function(yaml_parse_seq LINE LINES INDENT VAR)
     set(SEQ "")
 
+    message("==== PARSE SEQ ${INDENT}")
+
     if(NOT LINE STREQUAL "")
         message(FATAL_ERROR "parse_seq error")
     endif()
@@ -87,42 +89,50 @@ function(yaml_parse_seq LINE LINES INDENT VAR)
 
         if(LEVEL LESS INDENT)
             # return seq
+            message("<< 1 PARSE SEQ ${INDENT}")
             break()
         elseif(LEVEL GREATER INDENT)
-            message(FATAL_ERROR "found bad identing on line: ${LINE}")
+            message(FATAL_ERROR "found bad identing on line: ${LINE}: ${LEVEL} > ${INDENT}")
         endif()
 
-        if(NOT LINE MATCHES "(-[ ]+)(.*)")
-            if(NOT LINE MATCHES "-$(.*)")
+        if(NOT LINE MATCHES "^([ ]*-[ ]+)(.*)")
+            if(NOT LINE MATCHES "^([ ]*-$)(.*)")
                 # return seq
-                break()
-            endif()
-        else()
-            set(REST "${CMATE_MATCH_2}")
-            if(LINE MATCHES "-$")
-                set(LINE "")
-            else()
-                # return seq
+                message("<< 2 PARSE SEQ ${INDENT}")
                 break()
             endif()
         endif()
 
-        string(LENGTH LINE INDENT2)
+        set(REST "${CMAKE_MATCH_2}")
+        string(LENGTH "${CMAKE_MATCH_1}" INDENT2)
 
-        if(LINE MATCHES "^[^'\" ]*:[ ]*$" OR LINE MATCHES "^[^'\" ]*:[ ]+.")
+        if(REST MATCHES "^[^'\" ]*:[ ]*$" OR LINE MATCHES "^[^'\" ]*:[ ]+.")
             # Inline nested hash
+            string(REPEAT " " ${INDENT2} PAD)
+            list(POP_FRONT LINES)
+            list(PREPEND LINES "${PAD}${REST}")
             yaml_parse_map("" "${LINES}" ${INDENT2} MAP)
-        elseif(LINE MATCHES "^-[ ]+")
+        elseif(REST MATCHES "^-[ ]+")
             # Inline nested seq
+            string(REPEAT " " ${INDENT2} PAD)
+            list(POP_FRONT LINES)
+            list(PREPEND LINES "${PAD}${REST}")
             yaml_parse_seq("" "${LINES}" ${INDENT2} SEQ)
+        elseif(REST STREQUAL "")
+            list(POP_FRONT LINES)
+            message("WHOA")
         endif()
     endwhile()
 
+    message("<< 4 PARSE SEQ ${INDENT}")
+    set("LINES" ${LINES} PARENT_SCOPE)
     set("${VAR}" SEQ PARENT_SCOPE)
 endfunction()
 
 function(yaml_parse_map LINE LINES INDENT VAR)
     set(MAP "")
+
+    message("==== PARSE MAP ${INDENT} LINE: ${LINE}")
 
     if(NOT LINE STREQUAL "")
         message(FATAL_ERROR "parse_seq error")
@@ -132,11 +142,14 @@ function(yaml_parse_map LINE LINES INDENT VAR)
         list(GET LINES 0 LINE)
         yaml_count_indent("${LINE}" LEVEL)
 
+        message("MAP L=${LEVEL} I=${INDENT} LINE: ${LINE}")
+
         if(LEVEL LESS INDENT)
             # return map
+            message("<< 1 PARSE MAP ${INDENT}")
             break()
         elseif(LEVEL GREATER INDENT)
-            message(FATAL_ERROR "found bad identing on line: ${LINE}")
+            message(FATAL_ERROR "found bad identing on line: ${LINE}: ${LEVEL} > ${INDENT}")
         endif()
 
         if(${LINE} MATCHES "^([ ]*(.+):)")
@@ -151,13 +164,13 @@ function(yaml_parse_map LINE LINES INDENT VAR)
             # We have a value
             list(POP_FRONT LINES)
             yaml_parse_scalar(STR "${LINE}" TO_VAR VALUE)
-            message("JSON: ${KEY}=${VALUE}")
+            #message("JSON: ${KEY}=${VALUE}")
         else()
             # Indent/sub map
             list(POP_FRONT LINES)
 
             if(NOT LINES)
-                message("JSON: ${KEY}=null")
+                #message("JSON: ${KEY}=null")
                 break()
             endif()
 
@@ -168,13 +181,15 @@ function(yaml_parse_map LINE LINES INDENT VAR)
                 yaml_parse_seq("" "${LINES}" ${INDENT2} SEQ)
             else()
                 if(${INDENT} GREATER_EQUAL ${INDENT2})
-                    message("JSON: ${KEY}=null")
+                    #message("JSON: ${KEY}=null")
                 else()
                     yaml_parse_map("" "${LINES}" ${INDENT2} MAP)
                 endif()
             endif()
         endif()
     endwhile()
+
+    set("LINES" ${LINES} PARENT_SCOPE)
 endfunction()
 
 function(yaml_parse_doc LINES)
