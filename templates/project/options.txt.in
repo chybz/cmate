@@ -9,4 +9,14 @@ else()
     set(@P.UNAME@_BUILD_TESTS_INIT OFF)
 endif()
 
-option(@P.UNAME@_BUILD_TESTS "Build the unit tests." ${@P.UNAME@_BUILD_TESTS_INIT})
+option(
+    @P.UNAME@_BUILD_TESTS
+    "Build the unit tests."
+    ${@P.UNAME@_BUILD_TESTS_INIT}
+)
+
+option(
+    @P.UNAME@_FETCH_DEPS
+    "Fetch dependencies via FetchContent."
+    ${@P.UNAME@_FETCH_DEPS}
+)

@@ -145,6 +145,37 @@ function(cmate_configure_cmake_package PKGDESC VAR)
     set("${VAR}.COMP_COUNT" ${COMP_COUNT} PARENT_SCOPE)
 endfunction()
 
+function(cmate_configure_make_dep DEP VAR)
+    set("DEP.HOST" "")
+    set("DEP.URL" "")
+    set("DEP.REPO" "")
+    set("DEP.TAG" "")
+    set("DEP.ARGS" "")
+
+    string(JSON T ERROR_VARIABLE ERR TYPE ${DEP})
+
+    if(T STREQUAL "OBJECT")
+        string(JSON SPEC MEMBER ${DEP} 0)
+        cmate_dep_parse(${SPEC} DEP)
+        cmate_json_get_array(${DEP} ${SPEC} ARGS)
+        set("DEP.ARGS" ${ARGS})
+    else()
+        cmate_dep_parse(${DEP} DEP)
+    endif()
+
+    message("HOST=${DEP.HOST}")
+    message("URL=${DEP.URL}")
+    message("REPO=${DEP.REPO}")
+    message("TAG=${DEP.TAG}")
+    message("ARGS=${DEP.ARGS}")
+
+    set("${VAR}.HOST" ${DEP.HOST} PARENT_SCOPE)
+    set("${VAR}.URL" ${DEP.URL} PARENT_SCOPE)
+    set("${VAR}.REPO" ${DEP.REPO} PARENT_SCOPE)
+    set("${VAR}.TAG" "${DEP.TAG}" PARENT_SCOPE)
+    set("${VAR}.ARGS" "${DEP.ARGS}" PARENT_SCOPE)
+endfunction()
+
 function(cmate_configure_project_cmake_packages VAR)
     cmate_conf_get("packages.cmake" PKGS)
 
@@ -182,7 +213,14 @@ function(cmate_configure_project)
     set(CM_FILE "${CMATE_ROOT_DIR}/CMakeLists.txt")
     set(CMATE_CMAKE_VER 3.12)
 
-    # Prepare dependencies names/structure
+    # Prepare dependencies sources
+    cmate_conf_get("deps" DEPS)
+
+    foreach(DEP DEPS)
+        cmate_configure_make_dep(${DEP} GNA)
+    endforeach()
+
+    # Prepare CMake/PkgConfig dependencies names/structure
     foreach(PLIST "cmake;CM" "pkgconfig;PC")
         list(GET PLIST 0 PTYPE)
         list(GET PLIST 1 PVAR)

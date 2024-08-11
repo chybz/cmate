@@ -1,5 +1,15 @@
 # -*- CMake -*-
 % if(${P.CM.PKG_COUNT} GREATER 0)
+if(@P.UNAME@_FETCH_DEPS)
+
+include(FetchContent)
+%     foreach(PKG ${P.CM.PKGS})
+
+FetchContent_Declare(
+    %{ ${PKG} }%
+)
+%     endforeach()
+endif()
 
 %     foreach(PKG ${P.CM.PKGS})
 %         if(${P.CM.PKGS.${PKG}.COMP_COUNT} GREATER 0)

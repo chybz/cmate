@@ -1,240 +1,276 @@
-function(cmate_yaml_load2 FILE VAR)
+###############################################################################
+#
+# Simple YAML parser based on Perl's YAML::Tiny / Lua's tinyyaml
+#
+###############################################################################
+function(cmate_yaml_count_indent LINE VAR)
+    set(LEVEL 0)
+
+    if(LINE MATCHES "^([ ]+)")
+        string(LENGTH "${CMAKE_MATCH_1}" LEVEL)
+    endif()
+
+    set("${VAR}" ${LEVEL} PARENT_SCOPE)
 endfunction()
 
+function(cmate_yaml_unquote STR VAR)
+    set(VAL "")
 
+    if(STR MATCHES "^\"((\\\\.|[^\"])*)?\"$")
+        set(VAL "${CMAKE_MATCH_1}")
+    elseif(STR MATCHES "^'([^']*(''[^']*)*)?'$")
+        set(VAL "${CMAKE_MATCH_1}")
+    else()
+        set(VAL "${STR}")
+    endif()
 
-###############################################################################
-#
-# Simple YAML parser based on YAML::Tiny
-#
-###############################################################################
-function(cmate_yaml_type PATH VAR)
-    set(RES "UNKNOWN")
+    set(${VAR} ${VAL} PARENT_SCOPE)
+endfunction()
 
-    foreach(TYPE "scalar" "array" "hash")
-        if("${PATH}.__type__" STREQUAL "${TYPE}")
-            string(TOUPPER ${TYPE} RES)
+function(cmate_yaml_parse_scalar)
+    set(OPTS IS_KEY)
+    set(SINGLE STR TO_VAR)
+    set(MULTI "")
+    cmake_parse_arguments(SCALAR "${OPTS}" "${SINGLE}" "${MULTI}" ${ARGN})
+
+    set(VALUE "")
+
+    # Trim whitespace and comments
+    string(REGEX REPLACE "^[ ]+" "" SCALAR_STR ${SCALAR_STR})
+    string(REGEX REPLACE "[ ]+$" "" SCALAR_STR ${SCALAR_STR})
+    string(REGEX REPLACE "#.*$" "" STR ${SCALAR_STR})
+
+    if("${SCALAR_STR}" STREQUAL "~")
+        set(VALUE "null")
+    else()
+        cmate_yaml_unquote(${SCALAR_STR} VALUE)
+
+        if(VALUE MATCHES "[^0-9]" AND NOT SCALAR_IS_KEY)
+            set(VALUE "\"${VALUE}\"")
+        endif()
+    endif()
+
+    set(${SCALAR_TO_VAR} "${VALUE}" PARENT_SCOPE)
+endfunction()
+
+function(cmate_yaml_parse_seq)
+    set(OPTS "")
+    set(SINGLE LINE INDENT PREFIX)
+    set(MULTI LINES)
+    cmake_parse_arguments(MY "${OPTS}" "${SINGLE}" "${MULTI}" ${ARGN})
+
+    set(OBJ "[]")
+
+    if(NOT "${MY_LINE}" STREQUAL "")
+        message(FATAL_ERROR "parse_seq error: '${MY_LINE}'")
+    endif()
+
+    while(1)
+        list(LENGTH MY_LINES LINECOUNT)
+
+        if(${LINECOUNT} EQUAL 0)
             break()
         endif()
-    endforeach()
 
-    set(${VAR} ${RES} PARENT_SCOPE)
+        list(GET MY_LINES 0 LINE)
+        cmate_yaml_count_indent("${LINE}" LEVEL)
+
+        if(LEVEL LESS MY_INDENT)
+            # return seq
+            break()
+        elseif(LEVEL GREATER MY_INDENT)
+            message(FATAL_ERROR "found bad identing on line: ${LINE}: ${LEVEL} > ${MY_INDENT}")
+        endif()
+
+        if(NOT LINE MATCHES "^([ ]*-[ ]+)(.*)")
+            if(NOT LINE MATCHES "^([ ]*-$)(.*)")
+                # return seq
+                break()
+            endif()
+        endif()
+
+        set(REST "${CMAKE_MATCH_2}")
+        string(LENGTH "${CMAKE_MATCH_1}" INDENT2)
+
+        if(REST MATCHES "^[^'\" ]*:[ ]*$" OR LINE MATCHES "^[^'\" ]*:[ ]+.")
+            # Inline nested hash
+            string(REPEAT " " ${INDENT2} PAD)
+            list(POP_FRONT MY_LINES)
+            list(PREPEND MY_LINES "${PAD}${REST}")
+
+            cmate_yaml_parse_map(
+                LINE ""
+                LINES ${MY_LINES}
+                INDENT ${INDENT2}
+                PREFIX SUB
+            )
+            set(MY_LINES ${SUB_LINES})
+
+            string(JSON POS LENGTH "${OBJ}")
+            string(JSON OBJ SET ${OBJ} ${POS} "${SUB_JSON}")
+        elseif(REST MATCHES "^-[ ]+")
+            # Inline nested seq
+            string(REPEAT " " ${INDENT2} PAD)
+            list(POP_FRONT MY_LINES)
+            list(PREPEND MY_LINES "${PAD}${REST}")
+
+            cmate_yaml_parse_seq(
+                LINE ""
+                LINES ${MY_LINES}
+                INDENT ${INDENT2}
+                PREFIX SUB
+            )
+            set(MY_LINES ${SUB_LINES})
+
+            string(JSON POS LENGTH "${OBJ}")
+            string(JSON OBJ SET ${OBJ} ${POS} "${SUB_JSON}")
+        elseif("${REST}" STREQUAL "")
+            list(POP_FRONT MY_LINES)
+            message(FATAL_ERROR "WHOA")
+        elseif(NOT "${REST}" STREQUAL "")
+            list(GET MY_LINES 0 NEXTLINE)
+            cmate_yaml_count_indent("${NEXTLINE}" INDENT2)
+            list(POP_FRONT MY_LINES)
+            cmate_yaml_parse_scalar(STR "${REST}" TO_VAR VALUE)
+
+            string(JSON POS LENGTH "${OBJ}")
+            string(JSON OBJ SET ${OBJ} ${POS} ${VALUE})
+        endif()
+    endwhile()
+
+    set("${MY_PREFIX}_LINES" ${MY_LINES} PARENT_SCOPE)
+    set("${MY_PREFIX}_JSON" ${OBJ} PARENT_SCOPE)
 endfunction()
 
-function(cmate_yaml_check_type PATH TYPE)
-    cmate_yaml_type(${PATH} T)
+function(cmate_yaml_parse_map)
+    set(OPTS "")
+    set(SINGLE LINE INDENT PREFIX)
+    set(MULTI LINES)
+    cmake_parse_arguments(MY "${OPTS}" "${SINGLE}" "${MULTI}" ${ARGN})
 
-    if(NOT "${T}" STREQUAL "${TYPE}")
-        cmate_die("invalid type for ${PATH}: expected ${TYPE}, got ${T}")
+    set(OBJ "{}")
+
+    if(NOT "${MY_LINE}" STREQUAL "")
+        message(FATAL_ERROR "parse_map error: '${MY_LINE}'")
     endif()
+
+    while(1)
+        list(LENGTH MY_LINES LINECOUNT)
+
+        if(${LINECOUNT} EQUAL 0)
+            break()
+        endif()
+
+        list(GET MY_LINES 0 LINE)
+        cmate_yaml_count_indent("${LINE}" LEVEL)
+
+        if(LEVEL LESS MY_INDENT)
+            # return map
+            break()
+        elseif(LEVEL GREATER MY_INDENT)
+            message(FATAL_ERROR "found bad identing on line: ${LINE}: ${LEVEL} > ${MY_INDENT}")
+        endif()
+
+        if(${LINE} MATCHES "^([ ]*(.+):)")
+            string(LENGTH "${CMAKE_MATCH_1}" TOSTRIP)
+            cmate_yaml_parse_scalar(STR "${CMAKE_MATCH_2}" TO_VAR KEY IS_KEY 1)
+            string(SUBSTRING ${LINE} ${TOSTRIP} -1 LINE)
+        else()
+            message(FATAL_ERROR "failed to classify line: ${LINE}")
+        endif()
+
+        if(NOT "${LINE}" STREQUAL "")
+            # We have a value
+            list(POP_FRONT MY_LINES)
+            cmate_yaml_parse_scalar(STR "${LINE}" TO_VAR VALUE)
+            string(JSON OBJ SET ${OBJ} ${KEY} ${VALUE})
+        else()
+            # Indent/sub map
+            list(POP_FRONT MY_LINES)
+            list(LENGTH MY_LINES LINECOUNT)
+
+            if(LINECOUNT EQUAL 0)
+                string(JSON OBJ SET ${OBJ} ${KEY} "null")
+                break()
+            endif()
+
+            list(GET MY_LINES 0 LINE)
+            cmate_yaml_count_indent("${LINE}" INDENT2)
+
+            if("${LINE}" MATCHES "^[ ]*-")
+                cmate_yaml_parse_seq(
+                    LINE ""
+                    LINES "${MY_LINES}"
+                    INDENT ${INDENT2}
+                    PREFIX SUB
+                )
+                set(MY_LINES ${SUB_LINES})
+
+                string(JSON OBJ SET ${OBJ} ${KEY} "${SUB_JSON}")
+            else()
+                if(${MY_INDENT} GREATER_EQUAL ${INDENT2})
+                    string(JSON OBJ SET ${OBJ} ${KEY} "null")
+                else()
+                    cmate_yaml_parse_map(
+                        LINE ""
+                        LINES "${MY_LINES}"
+                        INDENT ${INDENT2}
+                        PREFIX SUB
+                    )
+                    set(MY_LINES ${SUB_LINES})
+
+                    string(JSON OBJ SET ${OBJ} ${KEY} "${SUB_JSON}")
+                endif()
+            endif()
+        endif()
+    endwhile()
+
+    set("${MY_PREFIX}_LINES" ${MY_LINES} PARENT_SCOPE)
+    set("${MY_PREFIX}_JSON" ${OBJ} PARENT_SCOPE)
 endfunction()
 
-function(cmate_yaml_is_subkey STR VAR)
-    set(RES 0)
+function(cmate_yaml_parse_doc LINES VAR)
+    while(LINES)
+        list(GET LINES 0 LINE)
 
-    if(STR MATCHES "^__[0-9]+$")
-        set(RES 1)
-    endif()
+        if(LINE STREQUAL "---")
+            list(POP_FRONT LINES)
+            continue()
+        elseif(LINE MATCHES "^[ ]*-")
+            # Array
+            cmate_yaml_parse_seq(
+                LINE ""
+                LINES ${LINES}
+                INDENT 0
+                PREFIX SUB
+            )
+            set(LINES ${SUB_LINES})
+        elseif(LINE MATCHES "^[ ]*[^ ]")
+            # Hash
+            cmate_yaml_count_indent("${LINE}" LEVEL)
+            cmate_yaml_parse_map(
+                LINE ""
+                LINES ${LINES}
+                INDENT ${LEVEL}
+                PREFIX SUB
+            )
+            set(LINES ${SUB_LINES})
+        else()
+            message(FATAL_ERROR "parse error")
+        endif()
+    endwhile()
 
-    set(${VAR} ${RES} PARENT_SCOPE)
-endfunction()
-
-function(cmate_yaml_keys PATH VAR)
-    set(${VAR} "${${PATH}.__keys__}" PARENT_SCOPE)
+    set(${VAR} "${SUB_JSON}" PARENT_SCOPE)
 endfunction()
 
 function(cmate_yaml_load FILE VAR)
     set(LINES "")
 
     if(EXISTS ${FILE})
-        file(STRINGS ${FILE} FLINES)
+        file(STRINGS ${FILE} LINES)
     endif()
 
-    foreach(LINE ${FLINES})
-        if(LINE MATCHES "^[ ]*(#.*)?$")
-            # Strip comments
-            continue()
-        else()
-            list(APPEND LINES "${LINE}")
-        endif()
-    endforeach()
+    cmate_yaml_parse_doc("${LINES}" JSON)
 
-    list(LENGTH LINES PREV_LINE_COUNT)
-
-    while(LINES)
-        list(GET LINES 0 LINE)
-
-        if(LINE STREQUAL "---")
-            # A document (ignored)
-            list(POP_FRONT LINES)
-        elseif(LINE MATCHES "^[ ]*-([ ]|$|-+$)")
-            cmate_yaml_load_array("0" "${LINES}" LINES JSON)
-        elseif(LINE MATCHES "^([ ]*)[^ ]")
-            string(LENGTH "${CMAKE_MATCH_1}" LEN)
-            cmate_yaml_load_hash("${LEN}" "${LINES}" LINES JSON)
-        endif()
-
-        list(LENGTH LINES LINE_COUNT)
-
-        if(NOT ${LINE_COUNT} LESS ${PREV_LINE_COUNT})
-            cmate_die("cmate_yaml_load: no lines consumed")
-        endif()
-    endwhile()
-
-    set(${VAR} "${JSON}" PARENT_SCOPE)
-endfunction()
-
-#
-# Implementation
-#
-macro(cmate_yaml_set JSON KEY VAL)
-    list(APPEND CMATE_YAML__VARS "${VAR}")
-
-    if(${VAR})
-        set(VAL "${${VAR}};${VAL}")
-    endif()
-
-    set(${VAR} "${VAL}")
-endmacro()
-
-macro(cmate_yaml_set_type VAR TYPE)
-    unset(${VAR})
-    cmate_yaml_set("${VAR}.__type__" "${TYPE}")
-endmacro()
-
-function(cmate_yaml_load_scalar STR VAR)
-    set(VALUE "")
-    set(IS_KEY 0)
-
-    if(${ARGC} GREATER 2 AND ARGV2 STREQUAL "1")
-        set(IS_KEY 1)
-    endif()
-
-    # Trim whitespace and comments
-    string(REGEX REPLACE "^[ ]+" "" STR ${STR})
-    string(REGEX REPLACE "[ ]+$" "" STR ${STR})
-    string(REGEX REPLACE "#.*$" "" STR ${STR})
-
-    if("${STR}" STREQUAL "~")
-        set(VALUE "null")
-    else()
-        cmate_unquote(${STR} VALUE)
-
-        if(VALUE MATCHES "[^0-9]" AND NOT ${IS_KEY})
-            set(VALUE "\"${VALUE}\"")
-        endif()
-    endif()
-
-    set(${VAR} "${VALUE}" PARENT_SCOPE)
-endfunction()
-
-macro(cmate_check_indent INDENTS LINE)
-    if("${LINE}" MATCHES "^([ ]*)")
-        string(LENGTH "${CMAKE_MATCH_1}" LEN)
-        list(GET INDENTS -1 INDENT)
-
-        if(${LEN} LESS ${INDENT})
-            break()
-        elseif(${LEN} GREATER ${INDENT})
-            cmate_die("bad indenting: (${LEN} > ${INDENT}): '${LINE}'")
-        endif()
-    else()
-        # Should not happen
-        cmate_die("invalid array line: ${LINE}")
-    endif()
-endmacro()
-
-function(cmate_yaml_load_array INDENTS LINES LINES_VAR JSON_VAR)
-    set(ARRAY "[]")
-
-    while(LINES)
-        list(GET LINES 0 LINE)
-
-        cmate_check_indent("${INDENTS}" "${LINE}")
-
-        if(${LINE} MATCHES "^([ ]*-[ ]+)[^\\'\"][^ ]*[ ]*:([ ]+|$)")
-            # Inline nested hash
-            string(LENGTH "${CMAKE_MATCH_1}" INDENT2)
-
-            string(REPLACE "-" " " LINE "${LINE}")
-            list(POP_FRONT LINES)
-            list(PREPEND LINES "${LINE}")
-
-            cmate_yaml_load_hash(
-                "${INDENTS};${INDENT2}"
-                "${LINES}"
-                LINES
-                OBJ
-            )
-
-            string(JSON POS LENGTH "${ARRAY}")
-            string(JSON ARRAY SET ${ARRAY} ${POS} ${OBJ})
-        elseif(${LINE} MATCHES "^[ ]*-([ ]*)(.+)[ ]*$")
-            # Array entry with value
-            list(POP_FRONT LINES)
-            cmate_yaml_load_scalar("${CMAKE_MATCH_2}" VALUE)
-
-            string(JSON POS LENGTH "${ARRAY}")
-            string(JSON ARRAY SET ${ARRAY} ${POS} ${VALUE})
-        endif()
-    endwhile()
-
-    set(${LINES_VAR} ${LINES} PARENT_SCOPE)
-    set(${JSON_VAR} ${ARRAY} PARENT_SCOPE)
-endfunction()
-
-function(cmate_yaml_load_hash INDENTS LINES LINES_VAR JSON_VAR)
-    set(HASH "{}")
-
-    while(LINES)
-        list(GET LINES 0 LINE)
-
-        cmate_check_indent("${INDENTS}" "${LINE}")
-
-        if(${LINE} MATCHES "^([ ]*(.+):)")
-            string(LENGTH "${CMAKE_MATCH_1}" TOSTRIP)
-            cmate_yaml_load_scalar("${CMAKE_MATCH_2}" KEY 1)
-            string(SUBSTRING ${LINE} ${TOSTRIP} -1 LINE)
-        endif()
-
-        if(NOT "${LINE}" STREQUAL "")
-            # We have a value
-            cmate_yaml_load_scalar("${LINE}" VALUE)
-            string(JSON HASH SET ${HASH} ${KEY} ${VALUE})
-            list(POP_FRONT LINES)
-        else()
-            # Indent/sub hash
-            list(POP_FRONT LINES)
-
-            if(NOT LINES)
-                string(JSON HASH SET ${HASH} ${KEY} "null")
-                break()
-            endif()
-
-            list(GET LINES 0 LINE)
-
-            if(${LINE} MATCHES "^([ ]*)-")
-                string(LENGTH "${CMAKE_MATCH_1}" LEN)
-                cmate_yaml_load_array(
-                    "${INDENTS};${LEN}"
-                    "${LINES}"
-                    LINES
-                    OBJ
-                )
-                string(JSON HASH SET ${HASH} ${KEY} ${OBJ})
-            elseif(${LINE} MATCHES "^([ ]*).")
-                string(LENGTH "${CMAKE_MATCH_1}" LEN)
-                cmate_yaml_load_hash(
-                    "${INDENTS};${LEN}"
-                    "${LINES}"
-                    LINES
-                    OBJ
-                )
-                string(JSON HASH SET ${HASH} ${KEY} ${OBJ})
-            endif()
-        endif()
-    endwhile()
-
-    set(${LINES_VAR} ${LINES} PARENT_SCOPE)
-    set(${JSON_VAR} ${HASH} PARENT_SCOPE)
+    set("${VAR}" "${JSON}" PARENT_SCOPE)
 endfunction()
