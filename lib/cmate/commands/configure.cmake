@@ -154,12 +154,16 @@ function(cmate_configure_make_dep DEP VAR)
 
     string(JSON T ERROR_VARIABLE ERR TYPE ${DEP})
 
+    message("DEP=${DEP}")
+
     if(T STREQUAL "OBJECT")
+        message("DEP IS OBJECT")
         string(JSON SPEC MEMBER ${DEP} 0)
         cmate_dep_parse(${SPEC} DEP)
         cmate_json_get_array(${DEP} ${SPEC} ARGS)
         set("DEP.ARGS" ${ARGS})
     else()
+        message("DEP IS STR")
         cmate_dep_parse(${DEP} DEP)
     endif()
 
@@ -215,8 +219,9 @@ function(cmate_configure_project)
 
     # Prepare dependencies sources
     cmate_conf_get("deps" DEPS)
+    message("DEPS=${DEPS}")
 
-    foreach(DEP DEPS)
+    foreach(DEP ${DEPS})
         cmate_configure_make_dep(${DEP} GNA)
     endforeach()
 

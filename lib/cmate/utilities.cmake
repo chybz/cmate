@@ -368,6 +368,11 @@ function(cmate_check_ninja)
             file(REMOVE_RECURSE ${TDIR})
         endif()
 
+        file(
+            CHMOD "${CMATE_ENV_BIN_DIR}/${NCMD}"
+            FILE_PERMISSIONS OWNER_EXECUTE OWNER_READ
+        )
+
         set(NINJA "${CMATE_ENV_BIN_DIR}/${NCMD}")
     endif()
 
