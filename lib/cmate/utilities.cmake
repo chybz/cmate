@@ -295,11 +295,6 @@ function(cmate_download URL FILE)
             else()
                 cmate_die("download of ${URL} failed: ${ST}")
             endif()
-        else()
-            # TODO: REMOVE ME: Fake few errors
-            if(RETRIES GREATER 8)
-                set(RC 1)
-            endif()
         endif()
     endwhile()
 endfunction()
@@ -360,18 +355,15 @@ function(cmate_check_ninja)
         endif()
 
         if(NOT EXISTS "${CMATE_ENV_BIN_DIR}/${NCMD}")
+            cmate_msg("getting ninja from github")
             cmate_github_get_latest("ninja-build/ninja" "ninja-${NOS}.zip" NZIP)
 
             file(REMOVE_RECURSE ${TDIR})
             file(ARCHIVE_EXTRACT INPUT ${NZIP} DESTINATION ${TDIR})
             file(COPY_FILE "${TDIR}/${NCMD}" "${CMATE_ENV_BIN_DIR}/${NCMD}")
             file(REMOVE_RECURSE ${TDIR})
+            cmate_msg("ninja installed in ${CMATE_ENV_BIN_DIR}")
         endif()
-
-        file(
-            CHMOD "${CMATE_ENV_BIN_DIR}/${NCMD}"
-            FILE_PERMISSIONS OWNER_EXECUTE OWNER_READ
-        )
 
         set(NINJA "${CMATE_ENV_BIN_DIR}/${NCMD}")
     endif()
