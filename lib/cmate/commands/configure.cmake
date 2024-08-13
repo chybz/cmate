@@ -146,32 +146,16 @@ function(cmate_configure_cmake_package PKGDESC VAR)
 endfunction()
 
 function(cmate_configure_make_dep DEP VAR)
-    set("DEP.HOST" "")
-    set("DEP.URL" "")
-    set("DEP.REPO" "")
-    set("DEP.TAG" "")
-    set("DEP.ARGS" "")
-
     string(JSON T ERROR_VARIABLE ERR TYPE ${DEP})
 
-    message("DEP=${DEP}")
-
     if(T STREQUAL "OBJECT")
-        message("DEP IS OBJECT")
         string(JSON SPEC MEMBER ${DEP} 0)
         cmate_dep_parse(${SPEC} DEP)
         cmate_json_get_array(${DEP} ${SPEC} ARGS)
         set("DEP.ARGS" ${ARGS})
     else()
-        message("DEP IS STR")
         cmate_dep_parse(${DEP} DEP)
     endif()
-
-    message("HOST=${DEP.HOST}")
-    message("URL=${DEP.URL}")
-    message("REPO=${DEP.REPO}")
-    message("TAG=${DEP.TAG}")
-    message("ARGS=${DEP.ARGS}")
 
     set("${VAR}.HOST" ${DEP.HOST} PARENT_SCOPE)
     set("${VAR}.URL" ${DEP.URL} PARENT_SCOPE)
@@ -219,10 +203,10 @@ function(cmate_configure_project)
 
     # Prepare dependencies sources
     cmate_conf_get("deps" DEPS)
-    message("DEPS=${DEPS}")
 
-    foreach(DEP ${DEPS})
-        cmate_configure_make_dep(${DEP} GNA)
+    foreach(SPEC ${DEPS})
+        cmate_configure_make_dep(${SPEC} DEP)
+        list(APPEND "P.DEPS" ${DEP.REPO})
     endforeach()
 
     # Prepare CMake/PkgConfig dependencies names/structure
