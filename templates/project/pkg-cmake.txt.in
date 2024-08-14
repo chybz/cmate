@@ -1,13 +1,30 @@
 # -*- CMake -*-
 % if(${P.CM.PKG_COUNT} GREATER 0)
+
 if(@P.UNAME@_FETCH_DEPS)
+    include(FetchContent)
+%     foreach(DEP ${P.DEPS})
 
-include(FetchContent)
-%     foreach(PKG ${P.CM.PKGS})
+    FetchContent_Declare(
+        %{ ${P.DEPS.${DEP}.NAME} }%
+%         if("${P.DEPS.${DEP}.TYPE}" STREQUAL "git")
+        GIT_REPOSITORY %{ ${P.DEPS.${DEP}.URL} }%
+        GIT_TAG %{ ${P.DEPS.${DEP}.TAG} }%
+%         elseif("${P.DEPS.${DEP}.TYPE}" STREQUAL "url")
+        URL %{ ${P.DEPS.${DEP}.URL} }%
+%         endif()
+        OVERRIDE_FIND_PACKAGE
+    )
+%         if(NOT "${DEP.ARGS}" STREQUAL "")
 
-FetchContent_Declare(
-    %{ ${PKG} }%
-)
+%             foreach(ARG ${DEP.ARGS})
+%                 if (ARG MATCHES "^-D([^=]+)=(([^=]+))$")
+    set(%{ ${CMAKE_MATCH_1} }% "%{ ${CMAKE_MATCH_2} }%")
+%                 endif()
+%             endforeach()
+
+%         endif()
+    FetchContent_MakeAvailable(%{ ${P.DEPS.${DEP}.NAME} }%)
 %     endforeach()
 endif()
 

@@ -2,6 +2,7 @@ list(APPEND CMATE_CMDS "configure")
 list(
     APPEND
     CMATE_CONFIGURE_OPTIONS
+    "generate-only"
     "no-tests"
     "toolchain"
     "namespace"
@@ -19,6 +20,7 @@ Usage: cmate configure [OPTIONS]
 ${CMATE_CONFIGURE_SHORT_HELP}
 
 Options:
+  --generate-only        Don't run CMake
   --no-tests             Don't build tests
   --toolchain=FILE       CMake toolchain file
   --version=SEMVER       CMake package version
@@ -29,6 +31,8 @@ Options:
   --header-pat=PATTERN   CMate targets header file glob pattern
                          (default: \$CACHE{CMATE_HEADER_PAT})"
 )
+
+cmate_setg(CMATE_CONFIGURE_GENERATE_ONLY 0)
 
 function(cmate_configure_lib NAME TARGET SRC_BASE)
     if(${CMATE_DRY_RUN})
@@ -157,11 +161,7 @@ function(cmate_configure_make_dep DEP VAR)
         cmate_dep_parse(${DEP} DEP)
     endif()
 
-    set("${VAR}.HOST" ${DEP.HOST} PARENT_SCOPE)
-    set("${VAR}.URL" ${DEP.URL} PARENT_SCOPE)
-    set("${VAR}.REPO" ${DEP.REPO} PARENT_SCOPE)
-    set("${VAR}.TAG" "${DEP.TAG}" PARENT_SCOPE)
-    set("${VAR}.ARGS" "${DEP.ARGS}" PARENT_SCOPE)
+    cmate_setprops(${VAR} DEP "${CMATE_DEP_PROPS}" PARENT_SCOPE)
 endfunction()
 
 function(cmate_configure_project_cmake_packages VAR)
@@ -206,7 +206,8 @@ function(cmate_configure_project)
 
     foreach(SPEC ${DEPS})
         cmate_configure_make_dep(${SPEC} DEP)
-        list(APPEND "P.DEPS" ${DEP.REPO})
+        list(APPEND "P.DEPS" ${DEP.NAME})
+        cmate_setprops("P.DEPS.${DEP.NAME}" DEP "${CMATE_DEP_PROPS}")
     endforeach()
 
     # Prepare CMake/PkgConfig dependencies names/structure
@@ -484,14 +485,16 @@ function(cmate_configure)
 
     cmate_setg(CMATE_BUILD_TYPES "Debug;Release")
 
-    cmate_check_ninja()
+    if(NOT CMATE_CONFIGURE_GENERATE_ONLY)
+        cmate_check_ninja()
 
-    if(CMATE_NINJA OR WIN32)
-        cmate_configure_run_cmake_multi()
-    else()
-        foreach(TYPE ${CMATE_BUILD_TYPES})
-            cmate_configure_run_cmake(${TYPE})
-        endforeach()
+        if(CMATE_NINJA OR WIN32)
+            cmate_configure_run_cmake_multi()
+        else()
+            foreach(TYPE ${CMATE_BUILD_TYPES})
+                cmate_configure_run_cmake(${TYPE})
+            endforeach()
+        endif()
     endif()
 
     cmate_configure_save_targets()
