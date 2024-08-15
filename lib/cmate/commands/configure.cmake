@@ -63,7 +63,7 @@ function(cmate_configure_lib NAME TARGET SRC_BASE)
     file(WRITE ${CM_FILE} ${CONTENT})
 endfunction()
 
-function(cmate_configure_prog TYPE NAME TBASE SRC_BASE)
+function(cmate_configure_prog TYPE NAME TARGET SRC_BASE)
     string(TOUPPER ${TBASE} VBASE)
 
     if(${CMATE_DRY_RUN})
@@ -74,49 +74,29 @@ function(cmate_configure_prog TYPE NAME TBASE SRC_BASE)
     set(SDIR "${CMATE_ROOT_DIR}/${SRC_BASE}/${NAME}")
     set(CM_FILE "${SDIR}/CMakeLists.txt")
     set(LINK_FILE "${SDIR}/${CMATE_LINKFILE}")
-    file(GLOB_RECURSE SOURCES "${SDIR}/${CMATE_SOURCE_PAT}")
 
-    string(APPEND CONTENT "add_${TYPE}(${TBASE})\n")
+    # Set target template variables
+    set(T.NAME "${NAME}")
+    set(T.TNAME "${TARGET}")
 
-    string(
-        APPEND
-        CONTENT
-        "
-set(${VBASE}_SRC_DIR \"\${CMAKE_CURRENT_SOURCE_DIR}\")
-file(GLOB_RECURSE ${VBASE}_SOURCES \${${VBASE}_SRC_DIR}/${CMATE_SOURCE_PAT})
-list(APPEND ${VBASE}_ALL_SOURCES \${${VBASE}_SOURCES})
+    if(${TYPE} STREQUAL "bin")
+        set(T.TTYPE "executable")
+    elseif(${TYPE} STREQUAL "test")
+        set(T.TTYPE "test")
+    else()
+        cmate_die("invalid program type: ${TYPE}")
+    endif()
 
-target_sources(
-    ${TBASE}
-    PRIVATE
-        \${${VBASE}_ALL_SOURCES}
-)
+    string(TOUPPER ${TARGET} T.UTNAME)
 
-target_include_directories(
-    ${TBASE}
-    PRIVATE
-        \${CMAKE_CURRENT_SOURCE_DIR}
-)
-"
-    )
-
-    cmate_target_link_deps(${TBASE} ${LINK_FILE} DEPS)
-    string(APPEND CONTENT ${DEPS})
-
-    string(
-        APPEND
-        CONTENT
-        "
-set_target_properties(
-    ${TBASE}
-    PROPERTIES
-        CXX_STANDARD ${CMATE_PROJECT.std}
-        OUTPUT_NAME ${NAME}
-)
-"
+    cmate_load_link_deps(${LINK_FILE} TARGET)
+    cmate_tmpl_process(
+        FROM "targets/${TYPE}/CMakeLists.txt.in"
+        TO_VAR CONTENT
     )
 
     if(${CMATE_DUMP})
+        message(${DEPS})
         message(${CONTENT})
     endif()
 
@@ -124,7 +104,7 @@ set_target_properties(
 endfunction()
 
 function(cmate_configure_bin NAME TBASE SRC_BASE)
-    cmate_configure_prog("executable" ${NAME} ${TBASE} ${SRC_BASE})
+    cmate_configure_prog("bin" ${NAME} ${TBASE} ${SRC_BASE})
 endfunction()
 
 function(cmate_configure_test NAME TBASE SRC_BASE)

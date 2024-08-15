@@ -1,0 +1,26 @@
+add_%{ ${T.TTYPE} }%(@T.TNAME@)
+
+set(@T.UTNAME@_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+file(GLOB_RECURSE @T.UTNAME@_SOURCES "${@T.UTNAME@_SRC_DIR}/@CM.SPAT@")
+list(APPEND @T.UTNAME@_ALL_SOURCES ${@T.UTNAME@_SOURCES})
+
+target_sources(
+    @T.TNAME@
+    PRIVATE
+        ${@T.UTNAME@_ALL_SOURCES}
+)
+
+target_include_directories(
+    @T.TNAME@
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+%#
+%#include <targets/link.txt.in>
+
+set_target_properties(
+    @T.TNAME@
+    PROPERTIES
+        CXX_STANDARD @P.STD@
+        OUTPUT_NAME @P.NS@_@T.NAME@
+)
