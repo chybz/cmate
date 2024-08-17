@@ -34,7 +34,7 @@ find_package(
     %{ ${PKG} }%
     CONFIG REQUIRED
     COMPONENTS
-%         foreach(COMP ${P.CM.${PKG}.COMPS})
+%         foreach(COMP ${P.CM.PKGS.${PKG}.COMPS})
         %{ ${COMP} }%
 %         endforeach()
 )
