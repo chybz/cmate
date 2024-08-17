@@ -1,5 +1,10 @@
 # -*- CMake -*-
 
+%###
+%#
+%# Installation support
+%#
+%###
 install(
     TARGETS
 % foreach(TARGET ${P.TARGETS.INSTALL})

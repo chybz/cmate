@@ -3,7 +3,7 @@ function(cmate_tmpl_process_includes FROM VAR)
     set(CONTENT "")
 
     foreach(LINE ${LINES})
-        if(LINE MATCHES "^%#include <(.+)>$")
+        if(LINE MATCHES "^%%include <(.+)>$")
             set(INC "${CMAKE_MATCH_1}")
             cmate_tmpl_load("${INC}" TMPL)
             string(APPEND CONTENT "${TMPL}")
@@ -69,8 +69,13 @@ function(cmate_tmpl_eval FROM TO)
         elseif(LINE MATCHES "^%[ \t]*$")
             # Skip empty lines
             continue()
-        elseif(LINE MATCHES "^%#")
-            # Skip comment lines
+        elseif(LINE MATCHES "^%%")
+            # Skip template comment lines
+            continue()
+        elseif(LINE MATCHES "^%#(.*)$")
+            # Generate a CMake comment line
+            cmate_tmpl_block_end()
+            string(APPEND TMPL "string(APPEND RESULT \"#${CMAKE_MATCH_1}\\n\")\n")
             continue()
         elseif(NOT LINE MATCHES "^%[ \t]+")
             if(LINE MATCHES "%{[ ]+[^ ]+[ ]+}%")
@@ -101,7 +106,6 @@ function(cmate_tmpl_eval FROM TO)
     endforeach()
 
     cmate_tmpl_block_end()
-
     cmake_language(EVAL CODE "${TMPL}")
 
     set(${TO} "${RESULT}" PARENT_SCOPE)
@@ -121,7 +125,6 @@ function(cmate_tmpl_load FILE_OR_VAR VAR)
         file(STRINGS "${TFILE}" LINES)
         list(FILTER LINES EXCLUDE REGEX "^# -[*]-")
         list(JOIN LINES "\n" CONTENT)
-        #string(APPEND CONTENT "\n")
     else()
         cmate_die("no template content for '${FILE_OR_VAR}'")
     endif()

@@ -1,6 +1,11 @@
 # -*- CMake -*-
 % if(${P.CM.PKG_COUNT} GREATER 0)
 
+%###
+%#
+%# CMake dependencies
+%#
+%###
 if(@P.UNAME@_FETCH_DEPS)
     include(FetchContent)
 %     foreach(DEP ${P.DEPS})

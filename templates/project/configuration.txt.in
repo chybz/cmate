@@ -1,10 +1,16 @@
 # -*- CMake -*-
-cmake_minimum_required(VERSION @CMATE_CMAKE_VER@ FATAL_ERROR)
 
-project(@P.NAME@ VERSION @P.VER@ LANGUAGES C CXX)
-
+%###
+%#
+%# Configuration
+%#
+%###
 include(GNUInstallDirs)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS _SCL_SECURE_NO_WARNINGS)
+endif()
+
+if(@P.UNAME@_EXPORT_COMPILE)
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 endif()
