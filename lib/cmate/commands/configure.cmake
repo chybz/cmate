@@ -173,14 +173,7 @@ function(cmate_configure_project_pkgconfig_packages VAR)
     set("${VAR}.PKG_COUNT" ${PKG_COUNT} PARENT_SCOPE)
 endfunction()
 
-function(cmate_configure_project)
-    if(${CMATE_DRY_RUN})
-        return()
-    endif()
-
-    set(CM_FILE "${CMATE_ROOT_DIR}/CMakeLists.txt")
-    set(CMATE_CMAKE_VER 3.12)
-
+macro(cmate_configure_project_set_deps)
     # Prepare dependencies sources
     cmate_conf_get("deps" DEPS)
 
@@ -199,11 +192,13 @@ function(cmate_configure_project)
             "P.${PVAR}"
         )
     endforeach()
+endmacro()
 
+macro(cmate_configure_project_set_targets)
+    # Libraries and binaries
     set(P.TARGETS.BIN "")
     set(P.TARGETS.LIB "")
 
-    # Target subdirs
     if(CMATE_BINS OR CMATE_LIBS)
         foreach(TYPE "LIB" "BIN")
             foreach(T ${CMATE_${TYPE}S})
@@ -223,6 +218,7 @@ function(cmate_configure_project)
 
     list(APPEND P.TARGETS.INSTALL "${P.TARGETS.LIB}" "${P.TARGETS.BIN}")
 
+    # Tests
     set(P.TARGETS.TEST "")
 
     if(CMATE_TESTS)
@@ -238,10 +234,33 @@ function(cmate_configure_project)
             set("P.TARGETS.${TYPE}.${TNAME}.SUBDIR" "${TDIR}")
         endforeach()
     endif()
+endmacro()
 
-    cmate_tmpl_process(FROM "project/CMakeLists.txt.in" TO_VAR CONTENT)
+function(cmate_configure_project_cmake_files)
+    cmate_tmpl_process(
+        FROM "cmake/config.cmake.in"
+        TO_FILE "${CMATE_ROOT_DIR}/cmake/${P.NAME}-config.cmake.in"
+    )
+endfunction()
 
-    file(WRITE ${CM_FILE} ${CONTENT})
+function(cmate_configure_project)
+    if(${CMATE_DRY_RUN})
+        return()
+    endif()
+
+    set(CM_FILE "${CMATE_ROOT_DIR}/CMakeLists.txt")
+    set(CMATE_CMAKE_VER 3.12)
+
+    cmate_configure_project_set_deps()
+    cmate_configure_project_set_targets()
+
+    # Auxiliary CMake files
+    cmate_configure_project_cmake_files()
+
+    cmate_tmpl_process(
+        FROM "project/CMakeLists.txt.in"
+        TO_FILE ${CM_FILE}
+    )
 endfunction()
 
 function(cmate_configure_load_targets PREFIX)
@@ -350,27 +369,14 @@ function(cmate_configure_needed VAR LIBS BINS TESTS)
     set(${VAR} ${RES} PARENT_SCOPE)
 endfunction()
 
-function(cmate_configure_generate)
-    # Set CMate global template variables
-    set(CM.HPAT "${CMATE_HEADER_PAT}")
-    set(CM.SPAT "${CMATE_SOURCE_PAT}")
-
-    # Set project level template variables
-    set(P.NAME "${CMATE_PROJECT.name}")
-    string(TOUPPER "${CMATE_PROJECT.name}" P.UNAME)
-    set(P.VER "${CMATE_PROJECT.version}")
-    set(P.VER_MAJOR "${CMATE_PROJECT.version_major}")
-    set(P.VER_MINOR "${CMATE_PROJECT.version_minor}")
-    set(P.VER_PATCH "${CMATE_PROJECT.version_patch}")
-    set(P.NS "${CMATE_PROJECT.namespace}")
-    set(P.STD "${CMATE_PROJECT.std}")
-
+function(cmate_configure_libraries)
     foreach(NAME ${CMATE_LIBS})
         cmate_target_name(${NAME} "lib" "TNAME")
         cmate_configure_lib(${NAME} ${TNAME} "src/lib")
     endforeach()
+endfunction()
 
-    # Binaries and tests
+function(cmate_configure_binaries)
     foreach(TYPE "bin" "test")
         string(TOUPPER "CMATE_${TYPE}S" LNAME)
 
@@ -386,6 +392,29 @@ function(cmate_configure_generate)
             )
         endforeach()
     endforeach()
+endfunction()
+
+function(cmate_configure_cmake_files)
+endfunction()
+
+function(cmate_configure_generate)
+    # Set CMate global template variables
+    set(CM.HPAT "${CMATE_HEADER_PAT}")
+    set(CM.SPAT "${CMATE_SOURCE_PAT}")
+
+    # Set project level template variables
+    set(P.NAME "${CMATE_PROJECT.name}")
+    string(TOUPPER "${CMATE_PROJECT.name}" P.UNAME)
+    set(P.VER "${CMATE_PROJECT.version}")
+    set(P.VER_MAJOR "${CMATE_PROJECT.version_major}")
+    set(P.VER_MINOR "${CMATE_PROJECT.version_minor}")
+    set(P.VER_PATCH "${CMATE_PROJECT.version_patch}")
+    set(P.NS "${CMATE_PROJECT.namespace}")
+    set(P.STD "${CMATE_PROJECT.std}")
+
+    # Targets
+    cmate_configure_libraries()
+    cmate_configure_binaries()
 
     # Top-level project
     cmate_configure_project()

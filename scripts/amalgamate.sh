@@ -29,23 +29,16 @@ while IFS= read -r LINE; do
 ###############################################################################
 _EOF_INC_
         cat "$LIB_DIR"/"$INC"
-    elif ((!IN_INC_BLOCK)); then
-        echo "$LINE"
-    fi
-done < "$CMATE"
+    elif [[ "$LINE" == "## CMATE TEMPLATES" ]]; then
+        TMPLS=$(cd $TMPL_DIR && find . -type f | sed -e 's,^./,,g' | xargs)
 
-#
-# Templates
-#
-TMPLS=$(cd $TMPL_DIR && find . -type f | sed -e 's,^./,,g' | xargs)
+        for T in ${TMPLS}; do
+            TVAR=${T^^}
+            TVAR=${TVAR//-/_}
+            TVAR=${TVAR////_}
+            TVAR=${TVAR//./_}
 
-for T in ${TMPLS}; do
-    TVAR=${T^^}
-    TVAR=${TVAR//-/_}
-    TVAR=${TVAR////_}
-    TVAR=${TVAR//./_}
-
-    cat <<_EOF_TMPL_
+            cat <<_EOF_TMPL_
 
 ###############################################################################
 #
@@ -57,9 +50,13 @@ set(
     [=[
 _EOF_TMPL_
 
-    egrep \
-        -v '^# -[*]-' \
-        "${TMPL_DIR}/${T}"
+            egrep \
+                -v '^# -[*]-' \
+                "${TMPL_DIR}/${T}"
 
-    echo "]=])"
-done
+            echo "]=])"
+        done
+    elif ((!IN_INC_BLOCK)); then
+        echo "$LINE"
+    fi
+done < "$CMATE"

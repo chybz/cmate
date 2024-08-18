@@ -1,0 +1,3 @@
+# -*- CMake -*-
+%@PACKAGE_INIT@%
+include("${CMAKE_CURRENT_LIST_DIR}/@P.NAME@-targets.cmake")

@@ -5,23 +5,45 @@
 %# Installation support
 %#
 %###
+include(CMakePackageConfigHelpers)
+
+configure_package_config_file(
+  "cmake/@P.NAME@-config.cmake.in"
+  "${PROJECT_BINARY_DIR}/@P.NAME@-config.cmake"
+  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/@P.NAME@"
+  PATH_VARS CMAKE_INSTALL_INCLUDEDIR CMAKE_INSTALL_LIBDIR
+)
+
+write_basic_package_version_file(
+  "${PROJECT_BINARY_DIR}/@P.NAME@-config-version.cmake"
+  COMPATIBILITY AnyNewerVersion
+)
+
 install(
     TARGETS
 % foreach(TARGET ${P.TARGETS.INSTALL})
         %{ ${TARGET} }%
 % endforeach()
-    EXPORT @P.NAME@-config
+    EXPORT @P.NAME@-targets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 install(
-    EXPORT @P.NAME@-config
-    FILE @P.NAME@-config.cmake
+    EXPORT @P.NAME@-targets
+    FILE @P.NAME@-targets.cmake
     NAMESPACE @P.NS@::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/@P.NAME@
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/@P.NAME@"
 )
+
+install(
+    FILES
+        "${PROJECT_BINARY_DIR}/@P.NAME@-config.cmake"
+        "${PROJECT_BINARY_DIR}/@P.NAME@-config-version.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/@P.NAME@"
+)
+
 % foreach(TARGET ${P.TARGETS.LIB})
 
 install(

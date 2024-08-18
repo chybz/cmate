@@ -29,6 +29,18 @@ macro(cmate_tmpl_block_end)
     endif()
 endmacro()
 
+macro(cmate_tmpl_escape VAR)
+    if(${VAR} MATCHES "%@([^@]+)@%")
+        string(REPLACE "%@" "__CMATE_AT_BEGIN__" ${VAR} "${${VAR}}")
+        string(REPLACE "@%" "__CMATE_AT_END__" ${VAR} "${${VAR}}")
+    endif()
+endmacro()
+
+macro(cmate_tmpl_unescape VAR)
+    string(REPLACE "__CMATE_AT_BEGIN__" "@" ${VAR} "${${VAR}}")
+    string(REPLACE "__CMATE_AT_END__" "@" ${VAR} "${${VAR}}")
+endmacro()
+
 function(cmate_tmpl_eval FROM TO)
     set(IN_CM_BLOCK FALSE)
     set(IN_BLOCK FALSE)
@@ -94,6 +106,9 @@ function(cmate_tmpl_eval FROM TO)
                     math(EXPR RPOS "${END}+${IT_LEN}")
                     string(SUBSTRING "${LINE}" ${RPOS} -1 LINE)
                 endwhile()
+            elseif(LINE MATCHES "%@([^@]+)@%")
+                cmate_tmpl_block_end()
+                cmate_tmpl_escape(LINE)
             endif()
 
             cmate_tmpl_block_begin()
@@ -108,6 +123,10 @@ function(cmate_tmpl_eval FROM TO)
     cmate_tmpl_block_end()
     cmake_language(EVAL CODE "${TMPL}")
 
+    string(CONFIGURE "${RESULT}" RESULT @ONLY)
+
+    cmate_tmpl_unescape(RESULT)
+
     set(${TO} "${RESULT}" PARENT_SCOPE)
 endfunction()
 
@@ -117,7 +136,7 @@ function(cmate_tmpl_load FILE_OR_VAR VAR)
     string(REGEX REPLACE "[-/\\.]" "_" TVAR "${TVAR}")
     set(CONTENT "")
 
-    if(${TVAR})
+    if(NOT "${${TVAR}}" STREQUAL "")
         # In amalgamate mode, template is stored in a variable
         set(CONTENT "${${TVAR}}")
     elseif(EXISTS "${TFILE}")
@@ -152,7 +171,6 @@ function(cmate_tmpl_process)
 
     cmate_tmpl_load("${TMPL_FROM}" TMPL)
     cmate_tmpl_eval("${TMPL}" CONTENT)
-    string(CONFIGURE "${CONTENT}" CONTENT @ONLY)
 
     if(TMPL_TO_FILE)
         if(TMPL_APPEND)

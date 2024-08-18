@@ -123,6 +123,8 @@ function(cmate_process_cmd)
     endif()
 endfunction()
 
+## CMATE TEMPLATES
+
 ##############################################################################
 #
 # Main part
