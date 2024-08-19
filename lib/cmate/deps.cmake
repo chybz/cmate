@@ -89,7 +89,7 @@ function(cmate_dep_get_url URL)
     cmate_setg(CMATE_DEP_SOURCE_DIR ${SDIR})
 endfunction()
 
-cmate_setg(CMATE_DEP_PROPS "TYPE;NAME;URL;HOST;REPO;TAG;ARGS")
+cmate_setg(CMATE_DEP_PROPS "TYPE;NAME;URL;HOST;REPO;TAG;ARGS;SRCDIR")
 
 function(cmate_dep_parse SPEC VAR)
     if(SPEC MATCHES "^([A-Za-z0-9_]+)@([a-z]+://[^ ]+)$")

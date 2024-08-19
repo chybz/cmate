@@ -19,10 +19,13 @@ if(@P.UNAME@_FETCH_DEPS)
         URL %{ ${P.DEPS.${DEP}.URL} }%
 %         endif()
         OVERRIDE_FIND_PACKAGE
+%         if(NOT "${P.DEPS.${DEP}.SRCDIR}" STREQUAL "")
+        SOURCE_SUBDIR "%{ ${P.DEPS.${DEP}.SRCDIR} }%"
+%         endif()
     )
-%         if(NOT "${DEP.ARGS}" STREQUAL "")
+%         if(NOT "${P.DEPS.${DEP}.ARGS}" STREQUAL "")
 
-%             foreach(ARG ${DEP.ARGS})
+%             foreach(ARG ${P.DEPS.${DEP}.ARGS})
 %                 if (ARG MATCHES "^-D([^=]+)=(([^=]+))$")
     set(%{ ${CMAKE_MATCH_1} }% "%{ ${CMAKE_MATCH_2} }%")
 %                 endif()
