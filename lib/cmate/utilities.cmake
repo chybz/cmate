@@ -29,6 +29,10 @@ function(cmate_setg VAR VAL)
     set(${VAR} "${VAL}" CACHE INTERNAL "${VAR}")
 endfunction()
 
+function(cmate_unsetg VAR)
+    unset(${VAR} CACHE)
+endfunction()
+
 function(cmate_appendg VAR VAL)
     if(${VAR})
         set(VAL "${${VAR}};${VAL}")

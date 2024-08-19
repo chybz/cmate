@@ -14,6 +14,7 @@ Options:
 
 function(cmate_build)
     cmate_configure()
+    cmate_unsetg(CMATE_BUILD_TYPES)
 
     cmate_set_build_types(
         CMATE_BUILD_DEBUG
