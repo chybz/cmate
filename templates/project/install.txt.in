@@ -47,7 +47,7 @@ install(
 % foreach(TARGET ${P.TARGETS.LIB})
 
 install(
-    DIRECTORY "${PROJECT_SOURCE_DIR}/include/%{ ${P.TARGETS.LIB.${TARGET}.NAME} }%"
+    DIRECTORY "${PROJECT_SOURCE_DIR}/include/%{ ${P.TARGETS.LIB.${TARGET}.NAME} }%/"
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/@P.NS@
 )
 % endforeach()
