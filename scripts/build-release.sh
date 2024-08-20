@@ -20,7 +20,7 @@ echo "$VERSION" > "$VERSION_FILE"
 
 # Update version in main script
 sed \
-   -i "" \
+   -i"" \
    -e "s/^set(CMATE_VER.*/set(CMATE_VER \"$VERSION\")/" \
    "$BIN_DIR/cmate"
 
