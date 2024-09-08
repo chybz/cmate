@@ -2,7 +2,7 @@
 # -*- CMake -*-
 
 set(CMATE "cmate")
-set(CMATE_VER "1.0.0")
+set(CMATE_VER "1.1.0")
 set(CMATE_CMDS "")
 set(CMATE_DEPSFILE "deps.txt")
 set(CMATE_PRJFILE "project.yaml")
