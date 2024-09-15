@@ -149,7 +149,7 @@ function(cmate_configure_make_dep DEP VAR)
         cmate_die("invalid dependency: expected object or string, got ${DEP}")
     endif()
 
-    cmate_setprops(${VAR} DEP "${CMATE_DEP_PROPS}" PARENT_SCOPE)
+    cmate_setprops(${VAR} DEP "${CMATE_DEPS_PROPS}" PARENT_SCOPE)
 endfunction()
 
 function(cmate_configure_project_cmake_packages VAR)
@@ -188,7 +188,7 @@ macro(cmate_configure_project_set_deps)
     foreach(SPEC ${DEPS})
         cmate_configure_make_dep(${SPEC} DEP)
         list(APPEND "P.DEPS" ${DEP.NAME})
-        cmate_setprops("P.DEPS.${DEP.NAME}" DEP "${CMATE_DEP_PROPS}")
+        cmate_setprops("P.DEPS.${DEP.NAME}" DEP "${CMATE_DEPS_PROPS}")
     endforeach()
 
     # Prepare CMake/PkgConfig dependencies names/structure

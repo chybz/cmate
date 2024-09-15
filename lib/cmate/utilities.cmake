@@ -1,6 +1,13 @@
 function(cmate_die)
     list(JOIN ARGV " " MSGS)
-    message(FATAL_ERROR "CMate: error: ${MSGS}")
+    set(MSG "CMate: error: ${MSGS}")
+
+    if(${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.29)
+        message("${MSG}")
+        cmake_language(EXIT 1)
+    else()
+        message(FATAL_ERROR "${MSG}")
+    endif()
 endfunction()
 
 function(cmate_msg)
