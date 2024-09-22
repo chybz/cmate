@@ -260,19 +260,37 @@ function(cmate_unquote STR VAR)
 endfunction()
 
 function(cmate_run_prog)
-    cmake_parse_arguments(RUN "" "DIR" "CMD" ${ARGN})
+    set(OPTS QUIET)
+    set(SINGLE DIR MSG ERR)
+    set(MULTI CMD)
+    cmake_parse_arguments(RUN "${OPTS}" "${SINGLE}" "${MULTI}" ${ARGN})
 
     cmate_unescape_list(RUN_CMD)
+
+    if(RUN_MSG)
+        cmate_msg(${RUN_MSG})
+    endif()
+
+    if(RUN_QUIET)
+        list(APPEND EXEC_ARGS OUTPUT_QUIET)
+    endif()
 
     execute_process(
         COMMAND ${RUN_CMD}
         WORKING_DIRECTORY "${RUN_DIR}"
         RESULTS_VARIABLE RC
+        ${EXEC_ARGS}
     )
 
     if(RC)
-        list(JOIN ARGV " " RUN_CMD)
-        cmate_die("command failed: ${RUN_CMD}")
+        if(RUN_ERR)
+            set(ERR "${RUN_ERR}")
+        else()
+            list(JOIN ARGV " " ERR)
+            string(PREPEND ERR "command failed: ")
+        endif()
+
+        cmate_die("${ERR}")
     endif()
 endfunction()
 

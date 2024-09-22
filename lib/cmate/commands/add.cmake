@@ -17,5 +17,6 @@ function(cmate_add)
 
     list(GET CMATE_ARGS 0 URL)
     cmate_deps_parse(${URL} DEP)
-    cmate_deps_get_dep(DEP)
+    cmate_deps_dump_dep(DEP)
+    # cmate_deps_get_dep(DEP)
 endfunction()

@@ -21,6 +21,16 @@ function(cmate_deps_set_state DEP STATE)
     file(TOUCH ${FILE})
 endfunction()
 
+function(cmate_deps_check_repo URL)
+    set(GIT_ARGS "ls-remote")
+    cmate_run_prog(
+        MSG "checking remote at ${URL}"
+        ERR "invalid remote at ${URL}"
+        CMD git ${GIT_ARGS} ${URL}
+        QUIET
+    )
+endfunction()
+
 function(cmate_deps_get_repo DEP)
     set(HOST "${${DEP}.HOST}")
 
@@ -36,6 +46,8 @@ function(cmate_deps_get_repo DEP)
     endif()
 
     set(URL "${HOST}/${${DEP}.REPO}.git")
+
+    cmate_deps_check_repo(${URL})
 
     set(GIT_ARGS "clone")
     list(
@@ -114,13 +126,28 @@ function(cmate_deps_dump_dep DEP)
 endfunction()
 
 function(cmate_deps_parse SPEC VAR)
-    if(SPEC MATCHES "^([a-z]+://[^ ]+)$")
-        # Raw URL, find a name
-        cmate_setprop(DEP TYPE "url")
-        cmate_setprop(DEP URL ${CMAKE_MATCH_1})
-        cmate_deps_get_url_filename(DEP DFILE)
-        get_filename_component(NAME ${DFILE} NAME_WE)
-        cmate_setprop(DEP NAME ${NAME})
+    if(SPEC MATCHES "^([a-z]+)://([^ /]+)/([^ ]+)$")
+        message("1=${CMAKE_MATCH_1}")
+        message("2=${CMAKE_MATCH_2}")
+        message("3=${CMAKE_MATCH_3}")
+        set(SCHEME ${CMAKE_MATCH_1})
+        set(HOST ${CMAKE_MATCH_2})
+        set(REPO ${CMAKE_MATCH_3})
+
+        if(REPO MATCHES "(.+)\\.git(@([^ ]+))?$")
+            # Full remote Git URL
+            cmate_setprop(DEP TYPE "git")
+            cmate_setprop(DEP REPO ${CMAKE_MATCH_1})
+            cmate_setprop(DEP TAG "${CMAKE_MATCH_3}")
+            cmate_setprop(DEP URL "${SCHEME}://${HOST}/${REPO}.git")
+        else()
+            # Raw URL, find a name
+            cmate_setprop(DEP URL ${SPEC})
+            cmate_setprop(DEP TYPE "url")
+            cmate_deps_get_url_filename(DEP DFILE)
+            get_filename_component(NAME ${DFILE} NAME_WE)
+            cmate_setprop(DEP NAME ${NAME})
+        endif()
     elseif(SPEC MATCHES "^([A-Za-z0-9_]+)@([a-z]+://[^ ]+)$")
         # name@URL
         cmate_setprop(DEP TYPE "url")
@@ -304,10 +331,8 @@ function(cmate_deps_get_dep DEP)
     cmate_deps_dump_dep(${DEP})
 
     if(NOT "${${DEP}.REPO}" STREQUAL "")
-        cmate_msg("checking ${${DEP}.REPO}")
         cmate_deps_get_repo(${DEP})
     elseif(NOT "${${DEP}.URL}" STREQUAL "")
-        cmate_msg("checking ${${DEP}.URL}")
         cmate_deps_get_url(${DEP} SDIR)
         cmate_msg("SOURCES ARE IN ${SDIR}")
     else()

@@ -18,12 +18,6 @@ VERSION="$1"
 # Update changelog
 echo "$VERSION" > "$VERSION_FILE"
 
-# Update version in main script
-sed \
-   -i"" \
-   -e "s/^set(CMATE_VER.*/set(CMATE_VER \"$VERSION\")/" \
-   "$BIN_DIR/cmate"
-
 # Prepare releases directory
 rm -rf "$REL_DIR"
 mkdir -p "$REL_DIR"
@@ -31,6 +25,13 @@ mkdir -p "$REL_DIR/stage"
 
 # Build amalgamated CMate script
 $SCRIPTS_DIR/amalgamate.sh > "$STAGE_DIR/cmate"
+
+# Update version in main script
+sed \
+   -i"" \
+   -e "s/^set(CMATE_VER.*/set(CMATE_VER \"$VERSION\")/" \
+   "$STAGE_DIR/cmate"
+
 chmod +x "$STAGE_DIR/cmate"
 
 # Make release archive
