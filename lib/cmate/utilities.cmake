@@ -154,6 +154,16 @@ function(cmate_json_get_str JSON KEY VAR DEF)
     set(${VAR} ${STR} PARENT_SCOPE)
 endfunction()
 
+function(cmate_json_set_val JVAR KEY VAL)
+    string(JSON JSON SET ${${JVAR}} ${KEY} "${VAL}")
+    set(${JVAR} ${JSON} PARENT_SCOPE)
+endfunction()
+
+function(cmate_json_set_str JVAR KEY VAL)
+    cmate_json_set_val(${JVAR} ${KEY} "\"${VAL}\"")
+    set(${JVAR} ${${JVAR}} PARENT_SCOPE)
+endfunction()
+
 function(cmate_split STR SEP VAR)
     set(VALUES "")
 
@@ -207,11 +217,21 @@ function(cmate_conf_get PATH VAR)
     set(${VAR} "${VALUE}" PARENT_SCOPE)
 endfunction()
 
+function(cmate_conf_set_str PATH VAL)
+    cmate_split_conf_path(${PATH} KEYS)
+    cmate_json_set_str(CMATE_CONF "${KEYS}" "${VAL}")
+    cmate_setg(CMATE_CONF "${CMATE_CONF}")
+endfunction()
+
 function(cmate_load_conf FILE)
     set(PKGS "")
 
     if(NOT EXISTS ${FILE})
-        cmate_die("configuration not found: ${FILE}")
+        if("${CMATE_${CMATE_UCMD}_ALLOW_NO_CONF}")
+            return()
+        else()
+            cmate_die("configuration not found: ${FILE}")
+        endif()
     endif()
 
     cmate_yaml_load(${FILE} CMATE_CONF)
@@ -228,6 +248,14 @@ function(cmate_load_conf FILE)
     endforeach()
 
     cmate_set_version()
+endfunction()
+
+function(cmate_save_conf FILE)
+    if(EXISTS ${FILE})
+        cmate_die("${FILE} already exists")
+    endif()
+
+    cmate_yaml_save(${FILE} "${CMATE_CONF}")
 endfunction()
 
 function(cmate_project_varname NAME VAR)

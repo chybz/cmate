@@ -66,6 +66,8 @@ function(cmate_parse_arguments)
     list(LENGTH CMATE_ARGS CMATE_ARGC)
 
     cmate_setg(CMATE_CMD "${CMATE_CMD}")
+    string(TOUPPER "${CMATE_CMD}" CMATE_UCMD)
+    cmate_setg(CMATE_UCMD "${CMATE_UCMD}")
     cmate_setg(CMATE_ARGS "${CMATE_ARGS}")
     cmate_setg(CMATE_ARGC ${CMATE_ARGC})
     get_filename_component(CMATE_ENV "${CMATE_ENV}" REALPATH)
