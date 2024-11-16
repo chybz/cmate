@@ -79,15 +79,23 @@ macro(cmate_setv VAR VAL)
 endmacro()
 
 macro(cmate_setprop VAR PROP VAL)
-    set("${VAR}.${PROP}" "${VAL}")
+    set(SINGLE "")
+    set(MULTI "")
+    cmake_parse_arguments(ARGS "PARENT_SCOPE" "${SINGLE}" "${MULTI}" ${ARGN})
+
+    if(ARGS_PARENT_SCOPE)
+        set("${VAR}.${PROP}" "${VAL}" PARENT_SCOPE)
+    else()
+        set("${VAR}.${PROP}" "${VAL}")
+    endif()
 endmacro()
 
 macro(cmate_setprops PVAR VAR PROPS)
     set(SINGLE "")
     set(MULTI "")
-    cmake_parse_arguments(PROP "PARENT_SCOPE" "${SINGLE}" "${MULTI}" ${ARGN})
+    cmake_parse_arguments(ARGS "PARENT_SCOPE" "${SINGLE}" "${MULTI}" ${ARGN})
 
-    if(PROP_PARENT_SCOPE)
+    if(ARGS_PARENT_SCOPE)
         foreach(PROP ${PROPS})
             set("${PVAR}.${PROP}" "${${VAR}.${PROP}}" PARENT_SCOPE)
         endforeach()
@@ -223,6 +231,26 @@ function(cmate_conf_set_str PATH VAL)
     cmate_setg(CMATE_CONF "${CMATE_CONF}")
 endfunction()
 
+function(cmate_conf_load_version)
+    set(VER "")
+
+    cmate_conf_get("version_file" VFILE)
+
+    if(VFILE AND EXISTS ${VFILE})
+        # Allow file to be optional
+        file(STRINGS ${VFILE} LINES)
+        list(GET LINES 0 VER)
+    else()
+        cmate_conf_get("version" VER)
+    endif()
+
+    if("${VER}" STREQUAL "")
+        cmate_die("project variable \"version\" or \"version_file\" no set")
+    endif()
+
+    cmate_setg(CMATE_PROJECT.version "${VER}")
+endfunction()
+
 function(cmate_load_conf FILE)
     set(PKGS "")
 
@@ -237,7 +265,7 @@ function(cmate_load_conf FILE)
     cmate_yaml_load(${FILE} CMATE_CONF)
     cmate_setg(CMATE_CONF "${CMATE_CONF}")
 
-    foreach(VNAME "name" "version" "namespace" "std")
+    foreach(VNAME "name" "namespace" "std")
         cmate_conf_get(${VNAME} VAL)
 
         if("${VAL}" STREQUAL "")
@@ -247,6 +275,7 @@ function(cmate_load_conf FILE)
         endif()
     endforeach()
 
+    cmate_conf_load_version()
     cmate_set_version()
 endfunction()
 

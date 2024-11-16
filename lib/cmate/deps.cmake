@@ -1,23 +1,23 @@
-function(cmate_deps_get_dep_dir DEP VAR)
-    string(MD5 HASH "${${DEP}.URL}")
+function(cmate_deps_get_dep_dir DEPV VAR)
+    string(MD5 HASH "${${DEPV}.URL}")
     set(DIR "${CMATE_DL_DIR}/${HASH}")
     set("${VAR}" "${DIR}" PARENT_SCOPE)
 endfunction()
 
-function(cmate_deps_get_dep_cache_dir DEP TYPE VAR)
-    cmate_deps_get_dep_dir("${DEP}" DIR)
+function(cmate_deps_get_dep_cache_dir DEPV TYPE VAR)
+    cmate_deps_get_dep_dir("${DEPV}" DIR)
     set("${VAR}" "${DIR}/${TYPE}" PARENT_SCOPE)
 endfunction()
 
-function(cmate_deps_get_state_file DEP STATE VAR)
-    cmate_deps_get_dep_cache_dir("${DEP}" "state" DIR)
+function(cmate_deps_get_state_file DEPV STATE VAR)
+    cmate_deps_get_dep_cache_dir("${DEPV}" "state" DIR)
     set(${VAR} "${DIR}/.${STATE}" PARENT_SCOPE)
 endfunction()
 
-function(cmate_deps_set_state DEP STATE)
-    cmate_deps_get_dep_cache_dir("${DEP}" "state" DIR)
+function(cmate_deps_set_state DEPV STATE)
+    cmate_deps_get_dep_cache_dir("${DEPV}" "state" DIR)
     file(MAKE_DIRECTORY ${DIR})
-    cmate_deps_get_state_file("${DEP}" ${STATE} FILE)
+    cmate_deps_get_state_file("${DEPV}" ${STATE} FILE)
     file(TOUCH ${FILE})
 endfunction()
 
@@ -31,8 +31,8 @@ function(cmate_deps_check_repo URL)
     )
 endfunction()
 
-function(cmate_deps_get_repo DEP)
-    set(HOST "${${DEP}.HOST}")
+function(cmate_deps_get_repo DEPV)
+    set(HOST "${${DEPV}.HOST}")
 
     if(HOST MATCHES "^\\$\\{(.+)\\}$")
         # Dereference variable
@@ -45,7 +45,7 @@ function(cmate_deps_get_repo DEP)
         set(HOST "https://gitlab.com")
     endif()
 
-    set(URL "${HOST}/${${DEP}.REPO}.git")
+    set(URL "${HOST}/${${DEPV}.REPO}.git")
 
     cmate_deps_check_repo(${URL})
 
@@ -56,49 +56,53 @@ function(cmate_deps_get_repo DEP)
         --depth 1
     )
 
-    if("${${DEP}.REF}")
-        list(APPEND GIT_ARGS --branch "${${DEP}.REF}")
+    if("${${DEPV}.REF}")
+        list(APPEND GIT_ARGS --branch "${${DEPV}.REF}")
     endif()
 
-    cmate_deps_get_dep_cache_dir(${DEP} "sources" SDIR)
-    cmate_deps_get_state_file(${DEP} "fetched" FETCHED)
+    cmate_deps_get_dep_cache_dir(${DEPV} "sources" SDIR)
+    cmate_deps_get_dep_cache_dir(${DEPV} "build" BDIR)
+    cmate_deps_get_state_file(${DEPV} "fetched" FETCHED)
 
     if(NOT IS_DIRECTORY ${SDIR} OR NOT EXISTS ${FETCHED})
         # Whatever the reason, we're (re-)fetching
         file(REMOVE_RECURSE ${SDIR})
         cmate_info("cloning ${URL} in ${SDIR}")
         cmate_run_prog(CMD git ${GIT_ARGS} ${URL} ${SDIR})
-        cmate_deps_set_state(${DEP} "fetched")
+        cmate_deps_set_state(${DEPV} "fetched")
     endif()
+
+    cmate_setprop(${DEPV} SRCDIR ${SDIR} PARENT_SCOPE)
+    cmate_setprop(${DEPV} BUILDDIR ${BDIR} PARENT_SCOPE)
 endfunction()
 
-function(cmate_deps_get_url_filename DEP VAR)
-    if("${${DEP}.URL}" MATCHES "/([^/]+)$")
+function(cmate_deps_get_url_filename DEPV VAR)
+    if("${${DEPV}.URL}" MATCHES "/([^/]+)$")
         set(FILE ${CMAKE_MATCH_1})
     else()
-        cmate_die("can't find filename from URL: ${${DEP}.URL}")
+        cmate_die("can't find filename from URL: ${${DEPV}.URL}")
     endif()
 
     set(${VAR} "${FILE}" PARENT_SCOPE)
 endfunction()
 
-function(cmate_deps_get_url DEP SOURCES_DIR_VAR)
-    string(MD5 HASH "${${DEP}.URL}")
+function(cmate_deps_get_url DEPV SOURCES_DIR_VAR)
+    string(MD5 HASH "${${DEPV}.URL}")
 
-    cmate_deps_get_url_filename(${DEP} DFILE)
-    cmate_deps_get_state_file("${DEP}" "fetched" FETCHED)
-    cmate_deps_get_state_file("${DEP}" "extracted" EXTRACTED)
-    cmate_deps_get_dep_dir(${DEP} DDIR)
-    cmate_deps_get_dep_cache_dir(${DEP} "sources" DSDIR)
+    cmate_deps_get_url_filename(${DEPV} DFILE)
+    cmate_deps_get_state_file("${DEPV}" "fetched" FETCHED)
+    cmate_deps_get_state_file("${DEPV}" "extracted" EXTRACTED)
+    cmate_deps_get_dep_dir(${DEPV} DDIR)
+    cmate_deps_get_dep_cache_dir(${DEPV} "sources" DSDIR)
+    cmate_deps_get_dep_cache_dir(${DEPV} "build" BDIR)
 
     set(DFILE "${DDIR}/${DFILE}")
 
     if(NOT EXISTS ${DFILE})
-        message("MAKING ${DDIR} for ${DFILE}")
         file(MAKE_DIRECTORY ${DDIR})
         cmate_info("downloading ${URL} in ${DDIR}")
-        cmate_download("${${DEP}.URL}" ${DFILE})
-        cmate_deps_set_state("${DEP}" "fetched")
+        cmate_download("${${DEPV}.URL}" ${DFILE})
+        cmate_deps_set_state("${DEPV}" "fetched")
     else()
     endif()
 
@@ -110,18 +114,19 @@ function(cmate_deps_get_url DEP SOURCES_DIR_VAR)
             INPUT ${DFILE}
             DESTINATION ${DSDIR}
         )
-        cmate_deps_set_state("${DEP}" "extracted")
+        cmate_deps_set_state("${DEPV}" "extracted")
     endif()
 
     cmate_unique_dir(${DSDIR} UDIR)
-    set(${SOURCES_DIR_VAR} ${UDIR} PARENT_SCOPE)
+    cmate_setprop(${DEPV} SRCDIR ${UDIR} PARENT_SCOPE)
+    cmate_setprop(${DEPV} BUILDDIR ${BDIR} PARENT_SCOPE)
 endfunction()
 
-cmate_setg(CMATE_DEPS_PROPS "TYPE;NAME;URL;HOST;REPO;TAG;ARGS;SRCDIR")
+cmate_setg(CMATE_DEPS_PROPS "TYPE;NAME;URL;HOST;REPO;REF;ARGS;SRCDIR;BUILDDIR")
 
-function(cmate_deps_dump_dep DEP)
+function(cmate_deps_dump_dep DEPV)
     foreach(PROP ${CMATE_DEPS_PROPS})
-        cmate_msg("DEP.${PROP}=${${DEP}.${PROP}}")
+        cmate_msg("DEP.${PROP}=${${DEPV}.${PROP}}")
     endforeach()
 endfunction()
 
@@ -138,7 +143,7 @@ function(cmate_deps_parse SPEC VAR)
             # Full remote Git URL
             cmate_setprop(DEP TYPE "git")
             cmate_setprop(DEP REPO ${CMAKE_MATCH_1})
-            cmate_setprop(DEP TAG "${CMAKE_MATCH_3}")
+            cmate_setprop(DEP REF "${CMAKE_MATCH_3}")
             cmate_setprop(DEP URL "${SCHEME}://${HOST}/${REPO}.git")
         else()
             # Raw URL, find a name
@@ -168,7 +173,7 @@ function(cmate_deps_parse SPEC VAR)
         endif()
 
         cmate_setprop(DEP REPO ${CMAKE_MATCH_3})
-        cmate_setprop(DEP TAG "${CMAKE_MATCH_5}")
+        cmate_setprop(DEP REF "${CMAKE_MATCH_5}")
         cmate_setprop(DEP URL "${DEP.HOST}/${DEP.REPO}.git")
         set("DEP.NAME" ${DEP.REPO})
         string(REGEX REPLACE "[^A-Za-z0-9_]" "_" "DEP.NAME" "${DEP.NAME}")
@@ -179,13 +184,13 @@ function(cmate_deps_parse SPEC VAR)
     cmate_setprops(${VAR} DEP "${CMATE_DEPS_PROPS}" PARENT_SCOPE)
 endfunction()
 
-function(cmate_deps_install_cmake_dep VAR)
-    cmate_deps_get_state_file(${VAR} "configured" CONFIGURED)
-    cmate_deps_get_state_file(${VAR} "built" BUILT)
-    cmate_deps_get_state_file(${VAR} "installed" INSTALLED)
+function(cmate_deps_install_cmake_dep DEPV)
+    cmate_deps_get_state_file(${DEPV} "configured" CONFIGURED)
+    cmate_deps_get_state_file(${DEPV} "built" BUILT)
+    cmate_deps_get_state_file(${DEPV} "installed" INSTALLED)
 
     if(NOT EXISTS ${CONFIGURED})
-        cmate_msg("building with: ${DEP.ARGS}")
+        cmate_msg("building with: ${${DEPV}.ARGS}")
 
         set(ARGS "")
 
@@ -207,135 +212,129 @@ function(cmate_deps_install_cmake_dep VAR)
                 -DBUILD_TESTING=OFF
                 -G Ninja
                 ${ARGS}
-                -S ${CMATE_DEPS_SOURCE_DIR} -B ${CMATE_DEPS_BUILD_DIR}
-                ${DEP.ARGS}
+                -S ${${DEPV}.SRCDIR} -B ${${DEPV}.BUILDDIR}
+                ${${DEPV}.ARGS}
         )
-        cmate_deps_set_state("configured")
+        cmate_deps_set_state(${DEPV} "configured")
     endif()
     if(NOT EXISTS ${BUILT})
         cmate_run_prog(
             CMD
                 ${CMAKE_COMMAND}
-                --build ${CMATE_DEPS_BUILD_DIR}
+                --build ${${DEPV}.BUILDDIR}
                 --config Release
                 --parallel
         )
-        cmate_deps_set_state("built")
+        cmate_deps_set_state(${DEPV} "built")
     endif()
     if(NOT EXISTS ${INSTALLED})
         cmate_run_prog(
             CMD
                 ${CMAKE_COMMAND}
-                --install ${CMATE_DEPS_BUILD_DIR}
+                --install ${${DEPV}.BUILDDIR}
                 --config Release
         )
-        cmate_deps_set_state("installed")
+        cmate_deps_set_state(${DEPV} "installed")
     endif()
 endfunction()
 
-function(cmate_deps_install_meson_dep)
-    cmate_deps_get_state_file("configured" CONFIGURED)
-    cmate_deps_get_state_file("installed" INSTALLED)
-    file(MAKE_DIRECTORY ${CMATE_DEPS_BUILD_DIR})
+function(cmate_deps_install_meson_dep DEPV)
+    cmate_deps_get_state_file(${DEPV} "configured" CONFIGURED)
+    cmate_deps_get_state_file(${DEPV} "installed" INSTALLED)
+    file(MAKE_DIRECTORY ${${DEPV}.BUILDDIR})
 
     if(NOT EXISTS ${CONFIGURED})
         cmate_run_prog(
-            DIR ${CMATE_DEPS_BUILD_DIR}
+            DIR ${${DEPV}.BUILDDIR}
             CMD
                 meson
                 --prefix=${CMATE_ENV_DIR}
                 --pkg-config-path=${CMATE_ENV_DIR}
                 --cmake-prefix-path=${CMATE_ENV_DIR}
-                ${DEP.ARGS}
-                . ${SRCDIR}
+                ${${DEPV}.ARGS}
+                . ${${DEPV}.SRCDIR}
         )
-        cmate_deps_set_state("configured")
+        cmate_deps_set_state(${DEPV} "configured")
     endif()
     if(NOT EXISTS ${INSTALLED})
         cmate_run_prog(meson install)
-        cmate_deps_set_state("installed")
+        cmate_deps_set_state(${DEPV} "installed")
     endif()
 endfunction()
 
-function(cmate_deps_install_autotools_dep)
-    cmate_deps_get_state_file("configured" CONFIGURED)
-    cmate_deps_get_state_file("installed" INSTALLED)
-    file(MAKE_DIRECTORY ${CMATE_DEPS_BUILD_DIR})
+function(cmate_deps_install_autotools_dep DEPV)
+    cmate_deps_get_state_file(${DEPV} "configured" CONFIGURED)
+    cmate_deps_get_state_file(${DEPV} "installed" INSTALLED)
+    file(MAKE_DIRECTORY ${${DEPV}.BUILDDIR})
 
     if(NOT EXISTS ${CONFIGURED})
         cmate_run_prog(
-            DIR ${CMATE_DEPS_BUILD_DIR}
+            DIR ${${DEPV}.BUILDDIR}
             CMD
-                ${CMATE_DEPS_SOURCE_DIR}/configure
+                ${${DEPV}.SRCDIR}/configure
                 --prefix=${CMATE_ENV_DIR}
-                ${DEP.ARGS}
+                ${${DEPV}.ARGS}
         )
-        cmate_deps_set_state("configured")
+        cmate_deps_set_state(${DEPV} "configured")
     endif()
     if(NOT EXISTS ${INSTALLED})
         cmate_run_prog(
-            DIR ${CMATE_DEPS_BUILD_DIR}
+            DIR ${${DEPV}.BUILDDIR}
             CMD make install
         )
-        cmate_deps_set_state("installed")
+        cmate_deps_set_state(${DEPV} "installed")
     endif()
 endfunction()
 
-function(cmate_deps_install_makefile_dep)
-    cmate_deps_get_state_file("built" BUILT)
-    cmate_deps_get_state_file("installed" INSTALLED)
-    file(MAKE_DIRECTORY ${CMATE_DEPS_BUILD_DIR})
+function(cmate_deps_install_makefile_dep DEPV)
+    cmate_deps_get_state_file(${DEPV} "built" BUILT)
+    cmate_deps_get_state_file(${DEPV} "installed" INSTALLED)
+    file(MAKE_DIRECTORY ${${DEPV}.BUILDDIR})
 
     if(NOT EXISTS ${BUILT})
         cmate_run_prog(
-            DIR ${CMATE_DEPS_SOURCE_DIR}
+            DIR ${${DEPV}.SRCDIR}
             CMD make
         )
-        cmate_deps_set_state("built")
+        cmate_deps_set_state(${DEPV} "built")
     endif()
     if(NOT EXISTS ${INSTALLED})
         cmate_run_prog(
-            DIR ${CMATE_DEPS_SOURCE_DIR}
+            DIR ${${DEPV}.SRCDIR}
             CMD make prefix=${CMATE_ENV_DIR} install
         )
-        cmate_deps_set_state("installed")
+        cmate_deps_set_state(${DEPV} "installed")
     endif()
 endfunction()
 
-function(cmate_deps_install_dep DEP)
-    if(NOT "${${DEP}.SRCDIR}" STREQUAL "")
-        cmate_setg(
-            CMATE_DEPS_SOURCE_DIR
-            "${CMATE_DEPS_SOURCE_DIR}/${${VAR}.SRCDIR}"
-        )
+function(cmate_deps_install_dep DEPV)
+    set(SDIR "${${DEPV}.SRCDIR}")
+
+    if(NOT IS_DIRECTORY "${SDIR}")
+        cmate_die("invalid source directory: ${SDIR}")
     endif()
 
-    if(NOT IS_DIRECTORY "${CMATE_DEPS_SOURCE_DIR}")
-        cmate_die("invalid source directory: ${CMATE_DEPS_SOURCE_DIR}")
-    endif()
-
-    if(EXISTS "${CMATE_DEPS_SOURCE_DIR}/CMakeLists.txt")
-        cmate_deps_install_cmake_dep(${VAR})
-    elseif(EXISTS "${CMATE_DEPS_SOURCE_DIR}/meson.build")
-        cmate_deps_install_meson_dep(${VAR})
-    elseif(EXISTS "${CMATE_DEPS_SOURCE_DIR}/configure")
-        cmate_deps_install_autotools_dep(${VAR})
-    elseif(EXISTS "${CMATE_DEPS_SOURCE_DIR}/Makefile")
-        cmate_deps_install_makefile_dep(${VAR})
+    if(EXISTS "${SDIR}/CMakeLists.txt")
+        cmate_deps_install_cmake_dep(${DEPV})
+    elseif(EXISTS "${SDIR}/meson.build")
+        cmate_deps_install_meson_dep(${DEPV})
+    elseif(EXISTS "${SDIR}/configure")
+        cmate_deps_install_autotools_dep(${DEPV})
+    elseif(EXISTS "${SDIR}/Makefile")
+        cmate_deps_install_makefile_dep(${DEPV})
     else()
-        cmate_die("don't know how to build in ${CMATE_DEPS_SOURCE_DIR}")
+        cmate_die("don't know how to build in ${SDIR}")
     endif()
 endfunction()
 
-function(cmate_deps_get_dep DEP)
-    cmate_deps_dump_dep(${DEP})
+function(cmate_deps_get_dep DEPV)
+    cmate_deps_dump_dep(${DEPV})
 
-    if(NOT "${${DEP}.REPO}" STREQUAL "")
-        cmate_deps_get_repo(${DEP})
-    elseif(NOT "${${DEP}.URL}" STREQUAL "")
-        cmate_deps_get_url(${DEP} SDIR)
-        cmate_msg("SOURCES ARE IN ${SDIR}")
+    if(NOT "${${DEPV}.REPO}" STREQUAL "")
+        cmate_deps_get_repo(${DEPV})
+    elseif(NOT "${${DEPV}.URL}" STREQUAL "")
+        cmate_deps_get_url(${DEPV} SDIR)
     else()
-        cmate_die("invalid dependency: ${DEP}")
+        cmate_die("invalid dependency: ${DEPV}")
     endif()
 endfunction()
