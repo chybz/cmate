@@ -14,7 +14,7 @@ Options:
 function(cmate_clean)
     cmate_configure_find_targets()
 
-    set(DIRS "BUILD" "STAGE" "STATE")
+    set(DIRS "BUILD" "STAGE" "STATE" "TMP")
 
     if(${CMATE_CLEAN_PURGE})
         list(APPEND DIRS "ENV" "DEPS")
