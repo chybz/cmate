@@ -31,7 +31,7 @@ set_target_properties(
     PROPERTIES
         CXX_STANDARD @P.STD@
         VERSION @P.VER@
-        SOVERSION @P.VER_MAJOR@.@P.VER_MINOR@
+        SOVERSION @P.VER_MAJOR@
         EXPORT_NAME @T.NAME@
         OUTPUT_NAME @P.NS@_@T.NAME@
 )
