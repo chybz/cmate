@@ -129,29 +129,6 @@ function(cmate_configure_cmake_package PKGDESC VAR)
     set("${VAR}.COMP_COUNT" ${COMP_COUNT} PARENT_SCOPE)
 endfunction()
 
-function(cmate_configure_make_dep DEP VAR)
-    string(JSON T ERROR_VARIABLE ERR TYPE ${DEP})
-
-    if(T STREQUAL "OBJECT")
-        string(JSON DKEYS LENGTH ${DEP})
-
-        if(NOT DKEYS EQUAL 1)
-            cmate_die("invalid dependency: expected a single key, got ${NKEYS}: ${DEP}")
-        endif()
-
-        string(JSON SPEC MEMBER ${DEP} 0)
-        cmate_dep_parse(${SPEC} DEP)
-        cmate_json_get_array(${DEP} "${SPEC};args" DEP.ARGS)
-        cmate_json_get_array(${DEP} "${SPEC};srcdir" DEP.SRCDIR)
-    elseif(T STREQUAL "STRING")
-        cmate_dep_parse(${DEP} DEP)
-    else()
-        cmate_die("invalid dependency: expected object or string, got ${DEP}")
-    endif()
-
-    cmate_setprops(${VAR} DEP "${CMATE_DEPS_PROPS}" PARENT_SCOPE)
-endfunction()
-
 function(cmate_configure_project_cmake_packages VAR)
     cmate_conf_get("packages.cmake" PKGS)
 
@@ -186,9 +163,9 @@ macro(cmate_configure_project_set_deps)
     cmate_conf_get("deps" DEPS)
 
     foreach(SPEC ${DEPS})
-        cmate_configure_make_dep(${SPEC} DEP)
+        cmate_deps_make_dep(${SPEC} DEP)
         list(APPEND "P.DEPS" ${DEP.NAME})
-        cmate_setprops("P.DEPS.${DEP.NAME}" DEP "${CMATE_DEPS_PROPS}")
+        cmate_deps_copy_dep("P.DEPS.${DEP.NAME}" DEP)
     endforeach()
 
     # Prepare CMake/PkgConfig dependencies names/structure
