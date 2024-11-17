@@ -14,7 +14,7 @@ if(@P.UNAME@_FETCH_DEPS)
         %{ ${P.DEPS.${DEP}.NAME} }%
 %         if("${P.DEPS.${DEP}.TYPE}" STREQUAL "git")
         GIT_REPOSITORY %{ ${P.DEPS.${DEP}.URL} }%
-        GIT_TAG %{ ${P.DEPS.${DEP}.TAG} }%
+        GIT_TAG %{ ${P.DEPS.${DEP}.REF} }%
 %         elseif("${P.DEPS.${DEP}.TYPE}" STREQUAL "url")
         URL %{ ${P.DEPS.${DEP}.URL} }%
 %         endif()
